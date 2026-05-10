@@ -75,4 +75,22 @@ def build_default_registry() -> ProviderRegistry:
     except ImportError:
         pass
 
+    try:
+        from akms.providers.gemini import GeminiProvider
+        registry.register("gemini", GeminiProvider)
+    except ImportError:
+        pass
+
+    try:
+        from akms.providers.deepseek import DeepSeekProvider
+        registry.register("deepseek", DeepSeekProvider)
+    except ImportError:
+        pass
+
+    try:
+        from akms.providers.ollama import OllamaProvider
+        registry.register("ollama", OllamaProvider)
+    except ImportError:
+        pass
+
     return registry

@@ -29,6 +29,271 @@
   },
   "customNotes": [],
   "directoryMap": {},
-  "hotPaths": [],
+  "hotPaths": [
+    {
+      "path": "src/akms/agents/librarian.py",
+      "accessCount": 10,
+      "lastAccessed": 1778431864206,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/agents/council.py",
+      "accessCount": 8,
+      "lastAccessed": 1778431927531,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/knowledge/wiki.py",
+      "accessCount": 8,
+      "lastAccessed": 1778431959152,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/core/message.py",
+      "accessCount": 7,
+      "lastAccessed": 1778431602423,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/agents/executor.py",
+      "accessCount": 7,
+      "lastAccessed": 1778431979454,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/core/budget.py",
+      "accessCount": 6,
+      "lastAccessed": 1778431766959,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/knowledge/graph.py",
+      "accessCount": 6,
+      "lastAccessed": 1778431798194,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/agents/expert.py",
+      "accessCount": 6,
+      "lastAccessed": 1778431831535,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/agents/__init__.py",
+      "accessCount": 5,
+      "lastAccessed": 1778431402264,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/providers/registry.py",
+      "accessCount": 5,
+      "lastAccessed": 1778431620373,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/agents/base.py",
+      "accessCount": 5,
+      "lastAccessed": 1778431758190,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/checkpoints/fork.py",
+      "accessCount": 5,
+      "lastAccessed": 1778431766357,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/checkpoints/store.py",
+      "accessCount": 5,
+      "lastAccessed": 1778431766620,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/config.py",
+      "accessCount": 4,
+      "lastAccessed": 1778431602555,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/integrations/generic.py",
+      "accessCount": 4,
+      "lastAccessed": 1778431966647,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/knowledge/db.py",
+      "accessCount": 3,
+      "lastAccessed": 1778431588962,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/knowledge/schema.sql",
+      "accessCount": 3,
+      "lastAccessed": 1778431589401,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/cli.py",
+      "accessCount": 3,
+      "lastAccessed": 1778431596362,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/checkpoints/schema.sql",
+      "accessCount": 3,
+      "lastAccessed": 1778431600887,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/providers/gemini.py",
+      "accessCount": 3,
+      "lastAccessed": 1778431620340,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/providers/deepseek.py",
+      "accessCount": 3,
+      "lastAccessed": 1778431620424,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/providers/ollama.py",
+      "accessCount": 3,
+      "lastAccessed": 1778431620483,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/logging/conversation_log.py",
+      "accessCount": 3,
+      "lastAccessed": 1778431631410,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/logging/token_tracker.py",
+      "accessCount": 3,
+      "lastAccessed": 1778431631808,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/providers/base.py",
+      "accessCount": 3,
+      "lastAccessed": 1778431638680,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/core/orchestrator.py",
+      "accessCount": 3,
+      "lastAccessed": 1778431798143,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/checkpoints/__init__.py",
+      "accessCount": 2,
+      "lastAccessed": 1778400160886,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/logging/__init__.py",
+      "accessCount": 2,
+      "lastAccessed": 1778400176037,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/knowledge/__init__.py",
+      "accessCount": 2,
+      "lastAccessed": 1778400176213,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/core/__init__.py",
+      "accessCount": 2,
+      "lastAccessed": 1778400177632,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/integrations/__init__.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431180296,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/knowledge/search.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431589341,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_checkpoints.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431628348,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_wiki.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431628660,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_db.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431629550,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_budget.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431629842,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/integrations/claude_code.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431630627,
+      "type": "file"
+    },
+    {
+      "path": "tests/conftest.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431637965,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_registry.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431639521,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_config.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431639806,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_message.py",
+      "accessCount": 2,
+      "lastAccessed": 1778431640651,
+      "type": "file"
+    },
+    {
+      "path": "src/akms/providers/openai_provider.py",
+      "accessCount": 1,
+      "lastAccessed": 1778400169899,
+      "type": "file"
+    },
+    {
+      "path": "pyproject.toml",
+      "accessCount": 1,
+      "lastAccessed": 1778431378047,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 1,
+      "lastAccessed": 1778432332770,
+      "type": "file"
+    }
+  ],
   "userDirectives": []
 }

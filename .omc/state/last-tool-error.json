@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"python - <<'EOF'\\nimport tempfile, os, sys\\nsys.path.insert(0, 'src')\\nfrom akms.checkpoints import CheckpointStore, fork_from_checkpoint, discard_fork, restore_home_state\\nfrom akms.core....",
+  "error": "Exit code 127\n(eval):1: command not found: python",
+  "timestamp": "2026-05-10T15:15:41.763Z",
+  "retry_count": 1
+}

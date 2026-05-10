@@ -1,0 +1,200 @@
+{
+  "title": "Agent Knowledge Management System (AKMS) Full Implementation",
+  "description": "Implement all remaining phases (2-8) of the AKMS plan: knowledge graph, checkpoint system, all three agents, additional providers, integrations, and tests.",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Knowledge Graph — Wiki Layer",
+      "priority": 1,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/knowledge/wiki.py exists with WikiLayer class",
+        "WikiLayer.create_node(section, id, title, content, tags, confidence) writes a properly-formed markdown file with YAML frontmatter to knowledge/graph/<section>/<id>.md",
+        "WikiLayer.read_node(section, id) returns a dict with keys: id, section, title, content, tags, confidence, wikilinks",
+        "WikiLayer.list_sections() returns list of section names from directory tree",
+        "WikiLayer.parse_wikilinks(content) extracts [[target]] patterns and returns list of target strings",
+        "WikiLayer.update_node(section, id, **fields) updates specific frontmatter or content fields without corrupting the file",
+        "knowledge/graph/_section.md template is created when a new section is first created"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Knowledge Graph — SQLite Structured Layer",
+      "priority": 2,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/knowledge/schema.sql exists with CREATE TABLE statements for: nodes, edges, provenance, search_index",
+        "nodes table has columns: id TEXT PK, section TEXT, file_path TEXT, title TEXT, created TEXT, updated TEXT, confidence REAL",
+        "edges table has columns: id INTEGER PK, source_id TEXT, target_id TEXT, relationship_type TEXT, weight REAL, auto_discovered INTEGER",
+        "provenance table has columns: id INTEGER PK, node_id TEXT, source_type TEXT, source_ref TEXT, date TEXT, verified_by TEXT",
+        "src/akms/knowledge/db.py exists with SQLiteLayer class",
+        "SQLiteLayer.init_db(db_path) creates the database with schema if not exists",
+        "SQLiteLayer.upsert_node(node_dict) inserts or updates a node row",
+        "SQLiteLayer.upsert_edge(source_id, target_id, rel_type, weight) inserts or updates an edge",
+        "SQLiteLayer.add_provenance(node_id, source_type, source_ref, date) inserts provenance record",
+        "SQLiteLayer.search_keywords(query) returns list of node dicts whose title or search_index content matches"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Knowledge Graph — Hybrid Interface + Search",
+      "priority": 3,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/knowledge/graph.py exists with HybridGraph class",
+        "HybridGraph.__init__(config) accepts KnowledgeConfig and initializes both wiki and sqlite layers",
+        "HybridGraph.add_node(section, id, title, content, tags, confidence, sources) writes to both wiki and sqlite layers atomically",
+        "HybridGraph.get_node(section, id) reads from wiki layer and returns dict",
+        "HybridGraph.get_related(node_id) returns list of related nodes by querying sqlite edges",
+        "HybridGraph.sync_links() scans wiki files for wikilinks and upserts corresponding edges in sqlite",
+        "src/akms/knowledge/search.py exists with GraphSearch class",
+        "GraphSearch.search(query, top_k=10) returns list of (node_dict, score) tuples ranked by keyword overlap",
+        "GraphSearch.search_section(section, query) restricts search to a single section",
+        "akms init command calls HybridGraph init and reports success"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Checkpoint System — Store + Fork/Rollback",
+      "priority": 4,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/checkpoints/schema.sql exists with CREATE TABLE for: checkpoints and forks tables",
+        "src/akms/checkpoints/store.py exists with CheckpointStore class",
+        "CheckpointStore.save(agent_type, agent_id, name, messages, is_home_state) persists checkpoint and returns checkpoint id",
+        "CheckpointStore.load(checkpoint_id) returns messages list for that checkpoint",
+        "CheckpointStore.get_home_state_id(agent_id) returns the latest is_home_state=True checkpoint id for that agent",
+        "CheckpointStore.list_checkpoints(agent_id) returns list of checkpoint metadata dicts",
+        "src/akms/checkpoints/fork.py exists with fork_from_checkpoint(store, checkpoint_id, extra_messages) that creates a fork row and returns fork_id",
+        "discard_fork(store, fork_id) sets fork status to 'discarded'",
+        "restore_home_state(store, agent_id) loads the home-state messages for that agent"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Budget Tracker + Conversation Logger + Token Tracker",
+      "priority": 5,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/core/budget.py exists with BudgetTracker class",
+        "BudgetTracker.record_usage(provider, model, tokens_in, tokens_out, cost_usd) appends to internal log",
+        "BudgetTracker.daily_total_usd() returns float sum of cost_usd for today's date",
+        "BudgetTracker.is_over_limit(limit_usd) returns True if daily_total_usd() >= limit_usd",
+        "BudgetTracker.should_warn(warn_usd) returns True if any single recorded cost >= warn_usd",
+        "src/akms/logging/token_tracker.py exists with TokenTracker class",
+        "TokenTracker.log(provider, model, tokens, cost_usd) appends JSON record to the configured token_log_path JSONL file",
+        "TokenTracker.load_today() reads the log file and returns records from today only",
+        "src/akms/logging/conversation_log.py exists with ConversationLogger class",
+        "ConversationLogger.log_message(agent_type, conversation_id, message) appends JSONL record",
+        "ConversationLogger.load_conversation(agent_type, conversation_id) reads and returns list of Message objects"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Base Agent + Expert Agent",
+      "priority": 6,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/agents/base.py exists with BaseAgent abstract class",
+        "BaseAgent.__init__ accepts provider, model, config, and logger",
+        "BaseAgent.send(messages) calls provider.chat and logs the exchange via ConversationLogger",
+        "BaseAgent.conversation_history property returns list of Messages for current session",
+        "src/akms/agents/expert.py exists with ExpertAgent(BaseAgent) class",
+        "ExpertAgent.load_section(graph) reads all nodes in the assigned section from HybridGraph",
+        "ExpertAgent.set_home_state(store) saves current messages to checkpoint store as is_home_state=True",
+        "ExpertAgent.answer(question) forks from home state, sends the question, discards fork, returns answer str",
+        "Caveman format: answer is compact, references graph paths, includes confidence float"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Librarian Agent",
+      "priority": 7,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/agents/librarian.py exists with LibrarianAgent(BaseAgent) class",
+        "LibrarianAgent.ingest_log(conversation_log_path) reads JSONL and extracts key insights as list of dicts",
+        "LibrarianAgent.update_graph_from_insights(insights, graph) calls graph.add_node or update_node for each insight",
+        "LibrarianAgent.digest_document(file_path, graph) reads file, chunks by heading, upserts nodes",
+        "LibrarianAgent.check_consistency(graph) returns list of broken wikilink issue dicts",
+        "LibrarianAgent.add_to_research_queue(topic, reason, queue_path) appends pending item to research_queue.md",
+        "LibrarianAgent.archive_node(section, node_id, reason, graph) moves node to archives/ with metadata"
+      ]
+    },
+    {
+      "id": "US-008",
+      "title": "Orchestrator + Executor Agent + Council Agent",
+      "priority": 8,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/core/orchestrator.py exists with Orchestrator class",
+        "Orchestrator.__init__ accepts config, registry, graph, checkpoint_store",
+        "Orchestrator.start_session() returns a new session_id string",
+        "Orchestrator.get_expert(section) returns an ExpertAgent loaded with that section",
+        "Orchestrator.query_expert(section, question) calls expert.answer(question) and returns answer str",
+        "src/akms/agents/executor.py exists with ExecutorAgent(BaseAgent) class",
+        "ExecutorAgent.run(task, orchestrator) sends task to provider, handles tool calls, returns final response str",
+        "src/akms/agents/council.py exists with CouncilAgent class",
+        "CouncilAgent.convene(task, context) spawns 5 sub-conversations and returns synthesis string"
+      ]
+    },
+    {
+      "id": "US-009",
+      "title": "Additional Providers: Gemini, DeepSeek, Ollama",
+      "priority": 9,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/providers/gemini.py exists with GeminiProvider(LLMProvider) class",
+        "src/akms/providers/deepseek.py exists with DeepSeekProvider that extends OpenAIProvider",
+        "src/akms/providers/ollama.py exists with OllamaProvider(LLMProvider) class",
+        "build_default_registry() registers gemini, deepseek, and ollama providers with lazy import guards",
+        "All three providers implement chat, stream, count_tokens"
+      ]
+    },
+    {
+      "id": "US-010",
+      "title": "Integration Wrappers",
+      "priority": 10,
+      "passes": true,
+      "acceptanceCriteria": [
+        "src/akms/integrations/generic.py exists with GenericWrapper class",
+        "GenericWrapper.__init__ accepts orchestrator and extra_system",
+        "GenericWrapper.wrap_messages(user_messages) prepends AKMS system prompt",
+        "GenericWrapper.handle_tool_call(tool_name, tool_args, orchestrator) routes query_knowledge calls",
+        "GenericWrapper.run(user_input, provider, model) sends wrapped messages and handles tool calls",
+        "src/akms/integrations/claude_code.py exists with ClaudeCodeWrapper(GenericWrapper)"
+      ]
+    },
+    {
+      "id": "US-011",
+      "title": "CLI Extensions",
+      "priority": 11,
+      "passes": true,
+      "acceptanceCriteria": [
+        "akms chat command exists: starts interactive REPL using ExecutorAgent",
+        "akms ingest <file> command exists: calls LibrarianAgent.digest_document",
+        "akms research command exists: prints current research_queue.md",
+        "akms budget command exists: prints today's token usage and cost",
+        "akms --help lists all commands: init, status, chat, ingest, research, budget",
+        "All commands gracefully handle missing config"
+      ]
+    },
+    {
+      "id": "US-012",
+      "title": "Tests — Unit + Integration",
+      "priority": 12,
+      "passes": true,
+      "acceptanceCriteria": [
+        "tests/ directory exists with conftest.py, test_config.py, test_message.py, test_registry.py, test_wiki.py, test_db.py, test_checkpoints.py, test_budget.py",
+        "test_config.py: load_config with no file returns defaults; load_config with temp YAML parses correctly",
+        "test_message.py: Message round-trips; Conversation.fork_at(2) creates fork with 2 messages",
+        "test_registry.py: register+create works; unknown name raises ValueError",
+        "test_wiki.py: create_node writes file; read_node reads it back; parse_wikilinks extracts targets",
+        "test_db.py: init_db creates tables; upsert_node + search_keywords finds inserted node",
+        "test_checkpoints.py: save/load round-trip; fork+discard; restore_home_state works",
+        "test_budget.py: record_usage + daily_total_usd correct; is_over_limit works",
+        "pytest runs with zero failures: python3 -m pytest tests/ -x -q"
+      ]
+    }
+  ]
+}
