@@ -54,3 +54,6 @@ knowledge:
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
   checkpoints_db_path: "knowledge/checkpoints.db"
+
+expert:
+  token_threshold: 50000  # tokens per Expert; sections larger than this are split

@@ -13,7 +13,9 @@ import yaml
 from akms.agents.base import BaseAgent
 
 if TYPE_CHECKING:
+    from akms.agents.expert import ExpertAgent
     from akms.config import AKMSConfig
+    from akms.core.orchestrator import Orchestrator
     from akms.knowledge.graph import HybridGraph
     from akms.logging.conversation_log import ConversationLogger
     from akms.providers.base import LLMProvider
@@ -258,6 +260,12 @@ class LibrarianAgent(BaseAgent):
     # ------------------------------------------------------------------
     # Node archival
     # ------------------------------------------------------------------
+
+    def spawn_expert(self, section: str, orchestrator: Orchestrator) -> ExpertAgent:
+        return orchestrator.spawn_expert(section)
+
+    def refresh_expert(self, section: str, orchestrator: Orchestrator) -> ExpertAgent | None:
+        return orchestrator.refresh_expert(section)
 
     def archive_node(
         self, section: str, node_id: str, reason: str, graph: HybridGraph

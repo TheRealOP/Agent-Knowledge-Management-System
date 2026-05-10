@@ -141,6 +141,7 @@ def chat(ctx: click.Context) -> None:
         raise SystemExit(1)
 
     from akms.agents.executor import ExecutorAgent
+    from akms.logging.conversation_log import ConversationLogger
 
     provider_cfg = config.providers.get(assignment.provider)
     if not provider_cfg:
@@ -148,7 +149,8 @@ def chat(ctx: click.Context) -> None:
         raise SystemExit(1)
 
     provider = registry.create_from_config(assignment.provider, provider_cfg)
-    executor = ExecutorAgent(provider=provider, model=assignment.model, config=config)
+    logger = ConversationLogger(config.knowledge.logs_dir)
+    executor = ExecutorAgent(provider=provider, model=assignment.model, config=config, logger=logger)
 
     click.echo(f"AKMS Chat (executor/{assignment.model}) — type 'quit' to exit\n")
     while True:
@@ -241,6 +243,83 @@ def budget(ctx: click.Context) -> None:
 
     if total_cost >= config.budget.daily_limit_usd:
         click.echo(f"\nWARNING: Daily limit (${config.budget.daily_limit_usd:.2f}) reached!")
+
+
+@main.group()
+@click.pass_context
+def overlay(ctx: click.Context) -> None:
+    """Manage user understanding overlays for knowledge concepts."""
+    pass
+
+
+@overlay.command(name="list")
+@click.pass_context
+def overlay_list(ctx: click.Context) -> None:
+    """List all tracked concepts and understanding scores."""
+    from akms.knowledge.user_overlay import UserOverlay
+
+    config = ctx.obj["config"]
+    uo = UserOverlay(config.knowledge.user_overlay_dir)
+    concepts = uo.list_concepts()
+    if not concepts:
+        click.echo("No concepts tracked yet.")
+        return
+    for cid, data in sorted(concepts.items()):
+        score = data.get("understanding", 0.0)
+        notes = data.get("notes", "")
+        reviewed = data.get("last_reviewed", "")
+        click.echo(f"  {cid}: {score:.2f}  (reviewed: {reviewed})  {notes}")
+
+
+@overlay.command(name="set")
+@click.argument("concept_id")
+@click.option("--score", type=float, required=True, help="Understanding score 0.0–1.0")
+@click.option("--notes", default="", help="Optional notes about this concept")
+@click.pass_context
+def overlay_set(ctx: click.Context, concept_id: str, score: float, notes: str) -> None:
+    """Set understanding score for a concept."""
+    from akms.knowledge.user_overlay import UserOverlay
+
+    config = ctx.obj["config"]
+    uo = UserOverlay(config.knowledge.user_overlay_dir)
+    uo.set_concept(concept_id, score, notes)
+    clamped = max(0.0, min(1.0, score))
+    click.echo(f"Set '{concept_id}' understanding to {clamped:.2f}")
+
+
+@overlay.command(name="get")
+@click.argument("concept_id")
+@click.pass_context
+def overlay_get(ctx: click.Context, concept_id: str) -> None:
+    """Get understanding score for a concept."""
+    from akms.knowledge.user_overlay import UserOverlay
+
+    config = ctx.obj["config"]
+    uo = UserOverlay(config.knowledge.user_overlay_dir)
+    data = uo.get_concept(concept_id)
+    if data is None:
+        click.echo(f"Concept '{concept_id}' not found.")
+        return
+    score = data.get("understanding", 0.0)
+    notes = data.get("notes", "")
+    reviewed = data.get("last_reviewed", "")
+    click.echo(f"{concept_id}: {score:.2f}  (reviewed: {reviewed})  {notes}")
+
+
+@overlay.command(name="remove")
+@click.argument("concept_id")
+@click.pass_context
+def overlay_remove(ctx: click.Context, concept_id: str) -> None:
+    """Remove a concept from the overlay."""
+    from akms.knowledge.user_overlay import UserOverlay
+
+    config = ctx.obj["config"]
+    uo = UserOverlay(config.knowledge.user_overlay_dir)
+    removed = uo.remove_concept(concept_id)
+    if removed:
+        click.echo(f"Removed '{concept_id}'.")
+    else:
+        click.echo(f"Concept '{concept_id}' not found.")
 
 
 if __name__ == "__main__":

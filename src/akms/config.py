@@ -55,6 +55,11 @@ class KnowledgeConfig:
     checkpoints_db_path: str = "knowledge/checkpoints.db"
 
 
+@dataclass
+class ExpertConfig:
+    token_threshold: int = 50000
+
+
 # edited by gemini — top-level config dataclass
 @dataclass
 class AKMSConfig:
@@ -64,6 +69,7 @@ class AKMSConfig:
     agent_assignments: dict[str, AgentAssignment] = field(default_factory=dict)
     budget: BudgetConfig = field(default_factory=BudgetConfig)
     knowledge: KnowledgeConfig = field(default_factory=KnowledgeConfig)
+    expert: ExpertConfig = field(default_factory=ExpertConfig)
 
 
 # edited by gemini — resolve env vars in strings
@@ -132,4 +138,5 @@ def load_config(path: str | Path | None = None) -> AKMSConfig:
         agent_assignments=_parse_assignments(raw.get("agent_assignments", {})),
         budget=BudgetConfig(**raw.get("budget", {})),
         knowledge=KnowledgeConfig(**raw.get("knowledge", {})),
+        expert=ExpertConfig(**raw.get("expert", {})),
     )

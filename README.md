@@ -200,6 +200,30 @@ Today's usage: 12,450 tokens  $0.0312
   claude: $0.0312
 ```
 
+> **Note:** `cost_usd` is always `$0.00` — no pricing table is implemented. Token counts are accurate. See [Known Limitations](#known-limitations).
+
+---
+
+### `akms overlay` — User Understanding Overlays
+
+Track your personal understanding score for knowledge concepts (0.0 = unknown, 1.0 = expert).
+
+```bash
+# List all tracked concepts with scores
+akms overlay list
+
+# Set understanding score for a concept
+akms overlay set cap-theorem --score 0.7 --notes "Understand C/A/P tradeoff but not formal proof"
+
+# Get a specific concept
+akms overlay get cap-theorem
+
+# Remove a concept
+akms overlay remove cap-theorem
+```
+
+Overlay data is stored in `knowledge/user_overlay/understanding.json`. Understanding scores are clamped to [0.0, 1.0].
+
 ---
 
 ### `akms research`
@@ -557,35 +581,38 @@ CLI shortcut: `akms budget`
 akms/
 ├── akms_config.yaml.example     ← reference config (copy to akms_config.yaml)
 ├── src/akms/
-│   ├── cli.py                   ← akms command
-│   ├── config.py                ← config loading
+│   ├── cli.py                   ← akms command (chat, ingest, overlay, budget, …)
+│   ├── config.py                ← config loading (ExpertConfig, AKMSConfig, …)
 │   ├── agents/
-│   │   ├── base.py              ← BaseAgent
+│   │   ├── base.py              ← BaseAgent (send, ask, token tracking, logging)
 │   │   ├── executor.py          ← main chat agent
-│   │   ├── expert.py            ← knowledge retrieval (fork/rollback)
-│   │   ├── librarian.py         ← knowledge curation
+│   │   ├── expert.py            ← knowledge retrieval (fork/rollback, load_nodes)
+│   │   ├── librarian.py         ← knowledge curation (spawn_expert, refresh_expert)
 │   │   └── council.py           ← 5-role deliberation
 │   ├── core/
 │   │   ├── message.py           ← provider-agnostic message type
 │   │   ├── budget.py            ← cost tracking
-│   │   └── orchestrator.py      ← agent coordination
+│   │   └── orchestrator.py      ← agent coordination, dynamic expert scaling
 │   ├── knowledge/
 │   │   ├── wiki.py              ← markdown layer
 │   │   ├── db.py                ← SQLite layer
 │   │   ├── graph.py             ← unified interface
-│   │   └── search.py            ← keyword search
+│   │   ├── search.py            ← keyword search
+│   │   └── user_overlay.py      ← user understanding overlays (JSON)
 │   ├── checkpoints/
 │   │   ├── store.py             ← save/load conversations
 │   │   └── fork.py              ← fork/rollback for Expert agents
 │   ├── providers/               ← claude, openai, gemini, deepseek, ollama
 │   ├── integrations/
-│   │   ├── generic.py           ← inject AKMS into any provider session
-│   │   └── claude_code.py       ← Claude Code specific
+│   │   ├── generic.py           ← GenericWrapper: AKMS system prompt injection
+│   │   ├── claude_code.py       ← ClaudeCodeWrapper
+│   │   ├── codex.py             ← CodexWrapper (OpenAI Codex)
+│   │   └── opencode.py          ← OpenCodeWrapper
 │   └── logging/
-│       ├── conversation_log.py
-│       └── token_tracker.py
+│       ├── conversation_log.py  ← JSONL conversation logger
+│       └── token_tracker.py     ← token + cost logger
 ├── knowledge/                   ← created by akms init
-└── tests/                       ← 43 tests (pytest)
+└── tests/                       ← unit, integration, edge case tests (pytest)
 ```
 
 ---
@@ -601,3 +628,127 @@ akms/
 **Archive, don't delete.** Use `librarian.archive_node()` to mark something wrong — it moves to `knowledge/archives/` with a reason. The history is preserved.
 
 **Keep the daily limit low while experimenting.** Set `daily_limit_usd: 1.00` until you know your usage patterns.
+
+---
+
+## Integrations
+
+AKMS includes wrapper classes that inject knowledge graph capabilities into existing tool sessions.
+
+### GenericWrapper
+
+Base class for all integrations. Prepends an AKMS system prompt to every message, listing available sections and explaining the `query_knowledge` tool call protocol.
+
+```python
+from akms.integrations import GenericWrapper
+
+wrapper = GenericWrapper(orchestrator=orc)
+response = wrapper.run("What patterns does this codebase use?", provider=provider, model="gpt-4o")
+```
+
+### ClaudeCodeWrapper
+
+Optimized for Claude Code sessions — references knowledge paths as `graph:section/node-id`.
+
+```python
+from akms.integrations import ClaudeCodeWrapper
+
+wrapper = ClaudeCodeWrapper(orchestrator=orc)
+```
+
+### CodexWrapper
+
+Optimized for OpenAI Codex — prefers brief, structured answers and code-related graph lookups.
+
+```python
+from akms.integrations import CodexWrapper
+
+wrapper = CodexWrapper(orchestrator=orc)
+```
+
+### OpenCodeWrapper
+
+Optimized for OpenCode — checks project conventions and architectural decisions before suggesting code changes.
+
+```python
+from akms.integrations import OpenCodeWrapper
+
+wrapper = OpenCodeWrapper(orchestrator=orc)
+```
+
+All wrappers call `provider.chat()` directly and handle multi-round tool call loops internally (up to 5 rounds).
+
+---
+
+## Dynamic Expert Scaling
+
+For knowledge sections whose content exceeds `expert.token_threshold` tokens, AKMS automatically splits the section into chunk experts:
+
+```yaml
+expert:
+  token_threshold: 50000  # tokens per Expert; sections larger than this are split
+```
+
+**Pool keying scheme:**
+- Single-expert sections: stored under `"{section}"` (unchanged behavior)
+- Split sections: chunk experts stored under `"{section}:0"`, `"{section}:1"`, etc.
+- Sentinel key `"{section}:__split__"` stores the list of chunk keys
+
+**Query routing for split sections:**
+- `query_expert()` tokenizes the question and scores each chunk by keyword overlap with its node IDs and tags
+- The top-2 scoring chunks are queried; their answers are concatenated
+
+**Expert management:**
+
+```python
+# Force-recreate an expert (evicts cached instance)
+orc.spawn_expert("distributed-systems")
+
+# Reload only if already cached (returns None if not in pool)
+orc.refresh_expert("distributed-systems")
+
+# Via Librarian (delegates to Orchestrator — Librarian never touches the pool directly)
+librarian.spawn_expert("distributed-systems", orc)
+librarian.refresh_expert("distributed-systems", orc)
+```
+
+---
+
+## User Understanding Overlays
+
+Track your personal understanding of knowledge graph concepts. Stored in `knowledge/user_overlay/understanding.json`.
+
+```python
+from akms.knowledge import UserOverlay
+
+uo = UserOverlay("knowledge/user_overlay")
+
+uo.set_concept("raft-consensus", 0.8, "Understand leader election, not log compaction")
+data = uo.get_concept("raft-consensus")
+# {"understanding": 0.8, "last_reviewed": "2026-05-10", "notes": "..."}
+
+concepts = uo.list_concepts()
+uo.remove_concept("raft-consensus")
+```
+
+Understanding scores are clamped to [0.0, 1.0]. Missing files are handled gracefully (return empty concepts).
+
+---
+
+## Known Limitations
+
+### `cost_usd` is always `0.00`
+
+No pricing table is implemented across any provider. `cost_usd` in every `Response` is always `0.0`. Token counts are accurate — cost tracking requires a future implementation that maps (provider, model) to per-token prices.
+
+### CouncilAgent bypasses token tracking
+
+`CouncilAgent` does not inherit from `BaseAgent` — it calls `provider.chat()` directly. Its LLM calls are not tracked by `BaseAgent.send()` and therefore not recorded in the token log. Fixing this requires making `CouncilAgent` extend `BaseAgent`.
+
+### GenericWrapper and subclasses bypass token tracking
+
+`GenericWrapper`, `ClaudeCodeWrapper`, `CodexWrapper`, and `OpenCodeWrapper` call `provider.chat()` directly in their `run()` method. Their LLM calls are not tracked. This is a known gap in the same category as `CouncilAgent`.
+
+### ExpertAgent fork calls bypass token tracking
+
+`ExpertAgent.answer()` calls `provider.chat()` directly by design — forks are throwaway conversation branches and must not mutate history. Expert Q&A pairs are logged to JSONL for Librarian ingestion, but the token counts for those calls are not tracked in the token log.
