@@ -17,6 +17,7 @@ knowledge/
 .venv/
 env/
 venv/
+/info
 
 # IDE
 .vscode/
