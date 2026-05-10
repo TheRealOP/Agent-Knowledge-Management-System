@@ -121,6 +121,18 @@
       "type": "file"
     },
     {
+      "path": "src/akms/cli.py",
+      "accessCount": 4,
+      "lastAccessed": 1778440245772,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 4,
+      "lastAccessed": 1778440384421,
+      "type": "file"
+    },
+    {
       "path": "src/akms/knowledge/db.py",
       "accessCount": 3,
       "lastAccessed": 1778431588962,
@@ -130,12 +142,6 @@
       "path": "src/akms/knowledge/schema.sql",
       "accessCount": 3,
       "lastAccessed": 1778431589401,
-      "type": "file"
-    },
-    {
-      "path": "src/akms/cli.py",
-      "accessCount": 3,
-      "lastAccessed": 1778431596362,
       "type": "file"
     },
     {
@@ -286,12 +292,6 @@
       "path": "pyproject.toml",
       "accessCount": 1,
       "lastAccessed": 1778431378047,
-      "type": "file"
-    },
-    {
-      "path": "README.md",
-      "accessCount": 1,
-      "lastAccessed": 1778432332770,
       "type": "file"
     }
   ],
