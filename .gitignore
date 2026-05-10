@@ -28,3 +28,6 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# OMC local state (not for version control)
+.omc/
