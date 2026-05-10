@@ -1,0 +1,56 @@
+# edited by gemini
+# AKMS Configuration Example
+# Copy to akms_config.yaml and fill in your API keys.
+
+providers:
+  claude:
+    api_key: "${CLAUDE_API_KEY}"
+    models:
+      - claude-sonnet-4
+      - claude-opus-4
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    models:
+      - gpt-4o
+      - o3
+  gemini:
+    api_key: "${GEMINI_API_KEY}"
+    models:
+      - gemini-2.5-pro
+  deepseek:
+    api_key: "${DEEPSEEK_API_KEY}"
+    models:
+      - deepseek-chat
+  ollama:
+    base_url: "http://localhost:11434"
+    models:
+      - llama3
+      - mistral
+
+agent_assignments:
+  executor:
+    provider: claude
+    model: claude-sonnet-4
+  expert:
+    provider: openai
+    model: gpt-4o
+  librarian:
+    provider: claude
+    model: claude-sonnet-4
+  council:
+    provider: openai
+    model: gpt-4o
+
+budget:
+  daily_limit_usd: 5.00
+  per_query_warn_usd: 0.50
+  track_tokens: true
+  token_log_path: "knowledge/logs/token_usage.json"
+
+knowledge:
+  graph_dir: "knowledge/graph"
+  archives_dir: "knowledge/archives"
+  user_overlay_dir: "knowledge/user_overlay"
+  logs_dir: "knowledge/logs"
+  db_path: "knowledge/akms.db"
+  checkpoints_db_path: "knowledge/checkpoints.db"

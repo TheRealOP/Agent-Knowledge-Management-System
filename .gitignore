@@ -1,0 +1,30 @@
+# edited by gemini
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# AKMS runtime data (contains secrets and user-specific knowledge)
+akms_config.yaml
+knowledge/
+info/  # edited by gemini
+
+# Environment
+.env
+.venv/
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
