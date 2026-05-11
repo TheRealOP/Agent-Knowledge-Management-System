@@ -201,6 +201,238 @@ def ingest(ctx: click.Context, file: str) -> None:
     click.echo(f"Done. {count} node(s) added to knowledge graph.")
 
 
+def _build_graph(config: object) -> object:
+    """Build a HybridGraph from config."""
+    from akms.config import AKMSConfig
+    from akms.knowledge.graph import HybridGraph
+
+    cfg: AKMSConfig = config  # type: ignore[assignment]
+    graph = HybridGraph(cfg.knowledge)
+    graph.init_graph_dirs()
+    return graph
+
+
+@main.command()
+@click.argument("query")
+@click.option("--top-k", default=10, show_default=True, help="Max results to return")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def search(ctx: click.Context, query: str, top_k: int, as_json: bool) -> None:
+    """Search the knowledge graph and return ranked results."""
+    import json as _json
+
+    config = ctx.obj["config"]
+    graph = _build_graph(config)
+    results = graph.search(query, top_k=top_k)
+
+    if not results:
+        if as_json:
+            click.echo("[]")
+        else:
+            click.echo("No results found.")
+        return
+
+    if as_json:
+        payload = [
+            {"id": node.get("id"), "section": node.get("section"), "title": node.get("title"), "score": score}
+            for node, score in results
+        ]
+        click.echo(_json.dumps(payload, indent=2))
+    else:
+        for node, score in results:
+            click.echo(f"  [{score:.0f}] {node.get('section')}/{node.get('id')}  {node.get('title', '')}")
+
+
+@main.command()
+@click.argument("section")
+@click.argument("question")
+@click.pass_context
+def ask(ctx: click.Context, section: str, question: str) -> None:
+    """Route a question to the Expert for a knowledge section."""
+    config = ctx.obj["config"]
+    registry = ctx.obj["registry"]
+
+    assignment = config.agent_assignments.get("expert") or config.agent_assignments.get("librarian")
+    if not assignment:
+        click.echo("Error: no 'expert' or 'librarian' assignment in agent_assignments", err=True)
+        raise SystemExit(1)
+
+    provider_cfg = config.providers.get(assignment.provider)
+    if not provider_cfg:
+        click.echo(f"Error: provider '{assignment.provider}' not configured", err=True)
+        raise SystemExit(1)
+
+    from akms.agents.expert import ExpertAgent
+
+    graph = _build_graph(config)
+    provider = registry.create_from_config(assignment.provider, provider_cfg)
+    expert = ExpertAgent(section=section, provider=provider, model=assignment.model, config=config)
+    count = expert.load_section(graph)
+    if count == 0:
+        click.echo(f"Warning: section '{section}' has no nodes.", err=True)
+    click.echo(expert.answer(question))
+
+
+@main.command()
+@click.argument("path")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def get(ctx: click.Context, path: str, as_json: bool) -> None:
+    """Get full content of a node. PATH format: section/node-id"""
+    import json as _json
+
+    if "/" not in path:
+        click.echo("Error: PATH must be section/node-id", err=True)
+        raise SystemExit(1)
+
+    section, node_id = path.split("/", 1)
+    config = ctx.obj["config"]
+    graph = _build_graph(config)
+    node = graph.get_node(section, node_id)
+
+    if node is None:
+        click.echo(f"Node '{path}' not found.", err=True)
+        raise SystemExit(1)
+
+    if as_json:
+        click.echo(_json.dumps(node, indent=2, default=str))
+    else:
+        click.echo(f"# {node.get('title', node_id)}")
+        click.echo(f"Section: {section}  |  ID: {node_id}")
+        tags = node.get("tags") or []
+        if tags:
+            click.echo(f"Tags: {', '.join(tags)}")
+        click.echo()
+        click.echo(node.get("content", ""))
+
+
+@main.command()
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def sections(ctx: click.Context, as_json: bool) -> None:
+    """List all available knowledge sections."""
+    import json as _json
+
+    config = ctx.obj["config"]
+    graph = _build_graph(config)
+    section_names = graph.list_sections()
+
+    if as_json:
+        payload = [{"section": s, "node_count": len(graph.list_nodes(s))} for s in section_names]
+        click.echo(_json.dumps(payload, indent=2))
+    else:
+        if not section_names:
+            click.echo("No sections found.")
+            return
+        for s in section_names:
+            count = len(graph.list_nodes(s))
+            click.echo(f"  {s}  ({count} node{'s' if count != 1 else ''})")
+
+
+@main.command()
+@click.argument("section")
+@click.argument("node_id")
+@click.argument("reason")
+@click.pass_context
+def archive(ctx: click.Context, section: str, node_id: str, reason: str) -> None:
+    """Archive a node — moves it out of the live graph."""
+    import shutil
+    from pathlib import Path
+
+    config = ctx.obj["config"]
+    graph = _build_graph(config)
+
+    node = graph.get_node(section, node_id)
+    if node is None:
+        click.echo(f"Node '{section}/{node_id}' not found.", err=True)
+        raise SystemExit(1)
+
+    src = Path(config.knowledge.graph_dir) / section / f"{node_id}.md"
+    dest_dir = Path(config.knowledge.archives_dir) / section
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{node_id}.md"
+
+    shutil.move(str(src), str(dest))
+    graph.sqlite.delete_node(node_id)
+    click.echo(f"Archived {section}/{node_id} → {dest}  (reason: {reason})")
+
+
+@main.command()
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def check(ctx: click.Context, as_json: bool) -> None:
+    """Find broken wikilinks across the knowledge graph."""
+    import json as _json
+
+    config = ctx.obj["config"]
+    graph = _build_graph(config)
+
+    all_node_ids: set[str] = set()
+    for s in graph.list_sections():
+        for nid in graph.list_nodes(s):
+            all_node_ids.add(nid)
+
+    broken: list[dict] = []
+    for s in graph.list_sections():
+        for nid in graph.list_nodes(s):
+            node = graph.get_node(s, nid)
+            if node is None:
+                continue
+            for target in node.get("wikilinks", []):
+                target_id = target.split("/")[-1]
+                if target_id not in all_node_ids:
+                    broken.append({"source": f"{s}/{nid}", "broken_link": target})
+
+    if as_json:
+        click.echo(_json.dumps(broken, indent=2))
+    else:
+        if not broken:
+            click.echo("No broken wikilinks found.")
+            return
+        click.echo(f"{len(broken)} broken wikilink(s):")
+        for item in broken:
+            click.echo(f"  {item['source']}  →  [[{item['broken_link']}]]")
+
+
+@main.command()
+@click.argument("task")
+@click.argument("context", default="")
+@click.option("--detailed", is_flag=True, help="Show all role perspectives, not just synthesis")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def council(ctx: click.Context, task: str, context: str, detailed: bool, as_json: bool) -> None:
+    """Run 5-role Council deliberation and return a recommendation."""
+    import json as _json
+
+    config = ctx.obj["config"]
+    registry = ctx.obj["registry"]
+
+    assignment = config.agent_assignments.get("council") or config.agent_assignments.get("expert") or config.agent_assignments.get("librarian")
+    if not assignment:
+        click.echo("Error: no council/expert/librarian assignment in agent_assignments", err=True)
+        raise SystemExit(1)
+
+    provider_cfg = config.providers.get(assignment.provider)
+    if not provider_cfg:
+        click.echo(f"Error: provider '{assignment.provider}' not configured", err=True)
+        raise SystemExit(1)
+
+    from akms.agents.council import CouncilAgent
+
+    provider = registry.create_from_config(assignment.provider, provider_cfg)
+    agent = CouncilAgent(provider=provider, model=assignment.model, config=config)
+
+    if detailed or as_json:
+        result = agent.convene_detailed(task, context)
+        if as_json:
+            click.echo(_json.dumps(result, indent=2))
+        else:
+            for role, text in result.items():
+                click.echo(f"\n## {role}\n{text}")
+    else:
+        click.echo(agent.convene(task, context))
+
+
 @main.command()
 @click.pass_context
 def research(ctx: click.Context) -> None:
