@@ -10,7 +10,7 @@ build/
 
 # AKMS runtime data (contains secrets and user-specific knowledge)
 akms_config.yaml
-knowledge/
+/knowledge/
 
 # Environment
 .env
