@@ -104,7 +104,7 @@ graph LR
 | File | Purpose |
 |---|---|
 | `__init__.py` | Exports `__version__` |
-| `cli.py` | Click CLI — `init`, `chat`, `ingest`, `status`, `budget`, `research`, `overlay` commands |
+| `cli.py` | Click CLI — `init`, `ingest`, `search`, `ask`, `get`, `sections`, `archive`, `check`, `council`, `status`, `research`, `overlay` commands. `chat` is deprecated (Executor is being removed). |
 | `config.py` | Dataclasses (`ProviderConfig`, `AgentAssignment`, `BudgetConfig`, `KnowledgeConfig`, `ExpertConfig`, `AKMSConfig`) + YAML loader with `${ENV_VAR}` resolution |
 
 ### `src/akms/agents/`
@@ -112,17 +112,17 @@ graph LR
 | File | Class | Purpose |
 |---|---|---|
 | `base.py` | `BaseAgent` | Abstract base — `send()`, `ask()`, `reset()`, token tracking, JSONL logging, session management |
-| `executor.py` | `ExecutorAgent` | Primary chat agent — detects `query_knowledge` JSON tool calls in LLM output, routes them through orchestrator, loops up to 5 rounds |
+| `executor.py` | `ExecutorAgent` | **To be removed.** Only used by `akms chat` (deprecated). With CLI-first, the user's IDE agent is Agent 1 — Executor is redundant. |
 | `expert.py` | `ExpertAgent` | Owns one knowledge section — `load_section()` builds system prompt from nodes, `answer()` uses fork/rollback (throwaway conversation branch) |
 | `librarian.py` | `LibrarianAgent` | Knowledge curator — `ingest_log()` extracts insights from JSONL, `digest_document()` chunks markdown by heading, `check_consistency()` finds broken wikilinks, `archive_node()` moves nodes to archives |
-| `council.py` | `CouncilAgent` | 5-role deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) — does NOT extend BaseAgent |
+| `council.py` | `CouncilAgent` | 5-role deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) — does NOT extend BaseAgent. Not a top-level CLI agent; used internally by Librarian to reason about knowledge structure. |
 
 ### `src/akms/core/`
 
 | File | Class | Purpose |
 |---|---|---|
 | `message.py` | `Role`, `Message`, `Response`, `Conversation` | Provider-agnostic message schema — serializable to/from dict, `Conversation.fork_at()` for branching |
-| `budget.py` | `BudgetTracker`, `UsageRecord` | In-memory cost tracking — `record_usage()`, `daily_total_usd()`, `is_over_limit()`, `summary()` |
+| `budget.py` | `BudgetTracker`, `UsageRecord` | **To be removed.** Budget tracking is out of scope for the core architecture. |
 | `orchestrator.py` | `Orchestrator` | Central coordinator — expert pool cache, dynamic expert scaling (splits large sections into chunk experts), `query_expert()` with keyword-overlap routing for split sections |
 
 ### `src/akms/knowledge/`
@@ -133,7 +133,7 @@ graph LR
 | `db.py` | `SQLiteLayer` | Structured SQLite store — `nodes`, `edges`, `provenance`, `search_index` tables, keyword search via `LIKE` |
 | `graph.py` | `HybridGraph` | Unified facade — writes to both wiki + SQLite, `sync_links()` parses wikilinks into DB edges, delegates search to `GraphSearch` |
 | `search.py` | `GraphSearch` | Tokenized keyword search — splits query into tokens, scores nodes by token-hit count, returns ranked results |
-| `user_overlay.py` | `UserOverlay` | JSON file storing per-concept understanding scores (0.0–1.0) with notes and review dates |
+| `user_overlay.py` | `UserOverlay` | **To be removed.** Per-concept understanding scores are out of scope. |
 | `schema.sql` | — | SQLite DDL for `nodes`, `edges`, `provenance`, `search_index` |
 
 ### `src/akms/checkpoints/`
@@ -156,21 +156,16 @@ graph LR
 | `deepseek.py` | `DeepSeekProvider` | DeepSeek adapter (OpenAI-compatible) |
 | `ollama.py` | `OllamaProvider` | Local Ollama adapter |
 
-### `src/akms/integrations/`
+### `src/akms/integrations/` — **To be removed**
 
-| File | Class | Purpose |
-|---|---|---|
-| `generic.py` | `GenericWrapper` | Base wrapper — injects AKMS system prompt listing available sections + tool protocol, handles multi-round tool call loops |
-| `claude_code.py` | `ClaudeCodeWrapper` | Tuned for Claude Code — `graph:section/node-id` references |
-| `codex.py` | `CodexWrapper` | Tuned for OpenAI Codex |
-| `opencode.py` | `OpenCodeWrapper` | Tuned for OpenCode — checks architectural decisions first |
+These wrapper classes are obsolete. The CLI is the universal interface — any agent reads `agents.md` and runs shell commands. No per-IDE wrapper code needed.
 
 ### `src/akms/logging/`
 
 | File | Class | Purpose |
 |---|---|---|
 | `conversation_log.py` | `ConversationLogger` | JSONL conversation logger — one file per `{date}_{conversation_id}.jsonl`, organized by agent type |
-| `token_tracker.py` | `TokenTracker` | JSONL token usage logger — `log()`, `load_today()`, `load_all()` |
+| `token_tracker.py` | `TokenTracker` | **To be removed.** Token tracking is out of scope for the core architecture. |
 
 ### `knowledge/` — Runtime Data
 
@@ -178,8 +173,7 @@ graph LR
 |---|---|
 | `knowledge/graph/` | Markdown node files organized by section subdirectories |
 | `knowledge/archives/` | Archived (retired) nodes with archive reason |
-| `knowledge/logs/` | JSONL conversation logs and token usage |
-| `knowledge/user_overlay/` | `understanding.json` — user concept scores |
+| `knowledge/logs/` | JSONL conversation logs |
 | `knowledge/research_queue.md` | Knowledge gaps flagged by the Librarian |
 
 ### `tests/` — Test Suite
@@ -191,57 +185,48 @@ graph LR
 | `test_db.py` | SQLite layer CRUD, search index, edges |
 | `test_wiki.py` | Wiki layer file I/O, frontmatter parsing, wikilinks |
 | `test_message.py` | Message/Response serialization, Conversation forking |
-| `test_budget.py` | BudgetTracker daily totals, limits, warnings |
 | `test_checkpoints.py` | Checkpoint save/load, home state, forks |
 | `test_expert.py` | Expert section loading, fork-based answering |
-| `test_executor.py` | Tool call detection and routing |
 | `test_librarian.py` | Log ingestion, document digestion, consistency checks, archival |
 | `test_orchestrator.py` | Expert pool caching, dynamic splitting, query routing |
-| `test_council.py` | Council deliberation flow |
 | `test_registry.py` | Provider registration and creation |
 | `test_search.py` | Keyword search ranking |
-| `test_user_overlay.py` | Overlay CRUD, score clamping |
 | `test_integration.py` | End-to-end flows |
 | `test_edge_cases.py` | Error handling, missing files, empty states |
 
 ---
 
-## 4. The Chat Flow — Step by Step
+## 4. The Ask Flow — `akms ask`
+
+This is the primary agent interaction pattern. The user's IDE agent (Claude Code, Codex, etc.) calls `akms ask` as a shell skill — no Executor involved.
 
 ```mermaid
 sequenceDiagram
-    participant U as 👤 User
+    participant A1 as Agent 1 (IDE)
     participant CLI as CLI
-    participant E as Executor
     participant O as Orchestrator
     participant X as Expert
     participant P as LLM Provider
     participant KG as Knowledge Graph
     participant CP as Checkpoint Store
 
-    U->>CLI: akms chat
-    CLI->>O: _build_orchestrator()
-    CLI->>E: create ExecutorAgent
-    U->>E: "What is CAP theorem?"
-    E->>P: chat(system + user msg)
-    P-->>E: response with tool call JSON
-    E->>E: detect query_knowledge JSON
-    E->>O: query_expert("distributed-systems", "CAP?")
+    A1->>CLI: akms ask distributed-systems "What is CAP theorem?"
+    CLI->>O: query_expert("distributed-systems", "CAP?")
     O->>O: check expert pool cache
-    O->>X: create ExpertAgent if not cached
+    O->>X: create ExpertAgent (if not cached)
     X->>KG: load_section() → read all nodes
-    X->>CP: set_home_state() → persist checkpoint
+    X->>CP: set_home_state() → persist home checkpoint
     O->>X: answer(question)
     X->>CP: fork_from_checkpoint()
     X->>P: chat(fork messages)
     P-->>X: expert answer
     X->>CP: discard_fork()
     X-->>O: compressed answer
-    O-->>E: "[distributed-systems] answer..."
-    E->>P: chat("Tool result: ... Continue.")
-    P-->>E: final response
-    E-->>U: "Based on the knowledge graph..."
+    O-->>CLI: answer text
+    CLI-->>A1: stdout
 ```
+
+The Expert's home state (system prompt + section nodes) is **persisted as a checkpoint**. Each question from Agent 1 creates a throwaway fork — answered and discarded. When Agent 1 is done, the Expert rolls back cleanly to its home state, ready for the next query with no context drift.
 
 ---
 
@@ -373,36 +358,45 @@ erDiagram
 
 ---
 
-## 7. The Four Agent Types
+## 7. Agent Roles
+
+Three roles in the system. Only two are concrete agents that extend `BaseAgent`.
 
 ```mermaid
 graph TB
-    subgraph Agents
-        direction LR
-        Base["BaseAgent (ABC)"]
-        Exec["ExecutorAgent"]
-        Exp["ExpertAgent"]
-        Lib["LibrarianAgent"]
-        Coun["CouncilAgent ⚠️"]
-
-        Base --> Exec
-        Base --> Exp
-        Base --> Lib
+    subgraph "Agent 1 — Main (external)"
+        IDE["User's IDE agent\n(Claude Code, Codex, ...)"]
     end
 
-    Exec ---|"You talk to this one"| UserFacing["User-facing chat"]
-    Exp ---|"One per section"| SectionKnow["Section knowledge"]
-    Lib ---|"Runs after sessions"| Curation["Knowledge curation"]
-    Coun ---|"5-role deliberation"| Deliberation["Complex decisions"]
+    subgraph AKMS
+        Base["BaseAgent (ABC)"]
+        Exp["ExpertAgent\n(Agent 2)"]
+        Lib["LibrarianAgent\n(Agent 3)"]
+        Coun["CouncilAgent\n(internal tool)"]
 
+        Base --> Exp
+        Base --> Lib
+        Lib -.->|"uses internally"| Coun
+    end
+
+    IDE -->|"akms ask / search / get"| Exp
+    Lib -->|"manages expert pool"| Exp
+
+    style IDE fill:#1e293b,color:#fff
     style Base fill:#6366f1,color:#fff
-    style Exec fill:#0ea5e9,color:#fff
     style Exp fill:#10b981,color:#fff
     style Lib fill:#f59e0b,color:#000
     style Coun fill:#ef4444,color:#fff
 ```
 
-> ⚠️ `CouncilAgent` does **not** extend `BaseAgent` — it calls `provider.chat()` directly.
+| Role | Who | Responsibility |
+|---|---|---|
+| **Agent 1** | User's IDE agent | Talks to the user, does work, queries Expert via CLI |
+| **Agent 2** | `ExpertAgent` | Pre-loads a section, answers queries via fork/rollback |
+| **Agent 3** | `LibrarianAgent` | Ingests knowledge, manages expert pool, uses Council internally to reason about graph structure |
+| *(internal)* | `CouncilAgent` | 5-role deliberation tool — called by Librarian, not exposed directly via CLI |
+
+> `CouncilAgent` does **not** extend `BaseAgent` — it calls `provider.chat()` directly with no shared history.
 
 ### BaseAgent Responsibilities
 
@@ -411,8 +405,7 @@ flowchart LR
     A["send(messages)"] --> B["provider.chat()"]
     B --> C["append to _history"]
     C --> D["log via ConversationLogger"]
-    D --> E["track via TokenTracker"]
-    E --> F["return Response"]
+    D --> F["return Response"]
 ```
 
 ---
@@ -541,11 +534,17 @@ flowchart TD
 ```mermaid
 flowchart LR
     CLI["akms"]
+
     CLI --> init["init"]
-    CLI --> chat["chat"]
     CLI --> ingest["ingest FILE"]
+    CLI --> search["search QUERY"]
+    CLI --> ask["ask SECTION QUESTION"]
+    CLI --> get["get SECTION/NODE-ID"]
+    CLI --> sections["sections"]
+    CLI --> archive["archive SECTION NODE REASON"]
+    CLI --> check["check"]
+    CLI --> council["council TASK CONTEXT"]
     CLI --> status["status"]
-    CLI --> budget["budget"]
     CLI --> research["research"]
     CLI --> overlay["overlay"]
 
@@ -554,49 +553,36 @@ flowchart LR
     overlay --> oget["get CONCEPT"]
     overlay --> orem["remove CONCEPT"]
 
-    init -->|"Creates"| Dirs["knowledge/ dirs + _index.md + research_queue.md"]
-    chat -->|"Starts"| Executor
-    ingest -->|"Runs"| Librarian
-    status -->|"Shows"| Config["Providers, assignments, budget"]
-    budget -->|"Reads"| TokenLog["token_usage.json"]
-    research -->|"Shows"| RQ["research_queue.md"]
+    init -->|"Creates"| Dirs["knowledge/ dirs"]
+    ingest -->|"Runs"| Librarian["LibrarianAgent"]
+    search -->|"Queries"| KG["HybridGraph"]
+    ask -->|"Routes to"| Expert["ExpertAgent (fork/rollback)"]
+    get -->|"Reads"| KG
+    sections -->|"Lists"| KG
+    archive -->|"Delegates to"| Librarian
+    check -->|"Delegates to"| Librarian
+    council -->|"Runs"| CouncilAgent["CouncilAgent"]
 
     style CLI fill:#1e293b,color:#fff
+    style Expert fill:#10b981,color:#fff
+    style Librarian fill:#f59e0b,color:#000
+    style CouncilAgent fill:#ef4444,color:#fff
+    style KG fill:#10b981,color:#fff
 ```
 
 ---
 
-## 13. Integration Wrappers
+## 13. Integration Wrappers — Removed
 
-```mermaid
-classDiagram
-    class GenericWrapper {
-        +orchestrator
-        +extra_system
-        +wrap_messages()
-        +handle_tool_call()
-        +run(user_input, provider, model)
-    }
-    class ClaudeCodeWrapper {
-        +graph:section/node-id refs
-    }
-    class CodexWrapper {
-        +brief structured answers
-    }
-    class OpenCodeWrapper {
-        +architectural decisions first
-    }
+`src/akms/integrations/` (`GenericWrapper`, `ClaudeCodeWrapper`, `CodexWrapper`, `OpenCodeWrapper`) **will be deleted.**
 
-    GenericWrapper <|-- ClaudeCodeWrapper
-    GenericWrapper <|-- CodexWrapper
-    GenericWrapper <|-- OpenCodeWrapper
-```
-
-These inject an AKMS system prompt into any existing tool session, enabling knowledge graph queries from within Claude Code, Codex, or OpenCode.
+These injected AKMS context into agent sessions via Python — a per-IDE maintenance burden. The CLI-first approach makes them redundant: any agent reads `agents.md` and runs shell commands. No wrapper code required.
 
 ---
 
-## 14. Logging & Token Tracking
+## 14. Conversation Logging
+
+`TokenTracker` and `BudgetTracker` will be removed. Conversation logging stays — it's the input for Librarian's `ingest_log()`.
 
 ```mermaid
 flowchart LR
@@ -605,21 +591,9 @@ flowchart LR
         CL --> JSONL["knowledge/logs/{agent_type}/{date}_{id}.jsonl"]
     end
 
-    subgraph TokenTracker
-        TT["log()"]
-        TT --> TL["knowledge/logs/token_usage.json"]
-    end
-
-    subgraph BudgetTracker
-        BT["record_usage()"]
-        BT --> Mem["In-memory records"]
-        Mem --> Daily["daily_total_usd()"]
-        Mem --> Limit["is_over_limit()"]
-    end
+    JSONL -->|"Librarian reads"| IL["ingest_log() → extract insights → add_node()"]
 
     style ConversationLogger fill:#6366f1,color:#fff
-    style TokenTracker fill:#0ea5e9,color:#fff
-    style BudgetTracker fill:#f59e0b,color:#000
 ```
 
 ---
@@ -681,42 +655,47 @@ Each role is a separate LLM call with a role-specific system prompt. The Synthes
 
 ```mermaid
 flowchart TB
-    subgraph Input
-        Chat["akms chat"]
-        Ingest["akms ingest"]
+    subgraph Input["Input (writes to graph)"]
+        Ingest["akms ingest FILE"]
         Manual["Manual .md files"]
+        Logs["JSONL conversation logs"]
     end
 
     subgraph Processing
-        Exec["Executor (chat)"]
-        Lib["Librarian (ingest)"]
+        Lib["LibrarianAgent\n(Agent 3)"]
         Sync["sync_links()"]
     end
 
     subgraph Storage
-        Wiki["📁 Markdown files"]
-        DB["🗄️ SQLite (akms.db)"]
-        Logs["📋 JSONL logs"]
-        Checkpoints["💾 checkpoints.db"]
+        Wiki["📁 Markdown\n(source of truth)"]
+        DB["🗄️ SQLite\n(derived index)"]
+        CP["💾 checkpoints.db\n(expert home states)"]
     end
 
-    subgraph Output
-        Answers["Chat responses"]
-        Status["Status/budget info"]
-        Research["Research queue"]
+    subgraph Query["Query (reads from graph)"]
+        Ask["akms ask"]
+        Search["akms search"]
+        Get["akms get / sections"]
     end
 
-    Chat --> Exec --> Answers
-    Exec -->|"logs"| Logs
+    subgraph Agents["Agent 2 — Expert Pool"]
+        Exp["ExpertAgent(s)\n(fork/rollback)"]
+    end
+
     Ingest --> Lib --> Wiki & DB
     Manual --> Sync --> DB
-    Logs -->|"Librarian reads"| Lib
-    Wiki & DB -->|"Expert reads"| Exec
+    Logs -->|"ingest_log()"| Lib
+    Wiki & DB -->|"load_section()"| Exp
+    Exp -->|"home state"| CP
+    Ask --> Exp
+    Search --> DB
+    Get --> Wiki
 
     style Input fill:#0ea5e9,color:#fff
     style Processing fill:#f59e0b,color:#000
     style Storage fill:#10b981,color:#fff
-    style Output fill:#6366f1,color:#fff
+    style Query fill:#6366f1,color:#fff
+    style Agents fill:#10b981,color:#fff
 ```
 
 ---
@@ -725,9 +704,12 @@ flowchart TB
 
 | Decision | Rationale |
 |---|---|
-| **Dual storage (Wiki + SQLite)** | Markdown is human-readable and git-friendly; SQLite enables fast search and relational queries |
-| **Fork/rollback for Experts** | Prevents context drift — each Q&A is isolated, home state never mutated |
-| **Text-based tool protocol** | LLM outputs JSON tool calls as text, parsed by string matching — simple, provider-agnostic |
-| **Lazy provider imports** | Only loads provider dependencies that are installed — avoids requiring all SDKs |
-| **Chunk expert splitting** | Large sections auto-split at `token_threshold` with keyword-overlap routing to top-2 chunks |
-| **CouncilAgent standalone** | Does not extend BaseAgent — 5 separate LLM calls don't need shared history |
+| **CLI is the universal interface** | Any agent (Claude Code, Codex, Ollama, ...) reads `agents.md` and calls `akms` shell commands as skills. No per-IDE wrapper code. |
+| **Markdown is source of truth** | LLMs traverse and connect ideas naturally in markdown. Git-friendly, human-readable, wikilink syntax maps directly to graph edges. |
+| **SQLite is a derived index** | Exists for fast search and edge queries when the graph grows large. Never the canonical record — always reconstructable from markdown. |
+| **Fork/rollback for Experts** | Each Q&A is a throwaway fork from the Expert's home state checkpoint. Home state never mutated — no context drift across queries. Think of it as `--resume` per query. |
+| **Chunk expert splitting** | Large sections auto-split at `token_threshold` with keyword-overlap routing to top-2 chunks. Expert pool keys: `section`, `section:0`, `section:1`, `section:__split__`. |
+| **CouncilAgent is internal** | 5-role deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) is a Librarian tool for reasoning about graph structure — not a top-level user-facing command. |
+| **Executor removed** | With CLI-first, the user's IDE agent is Agent 1. `ExecutorAgent` (and `akms chat`) are redundant. |
+| **No budget/token tracking** | Out of scope for the core system. Providers handle their own rate limits. |
+| **Lazy provider imports** | Only loads provider SDKs that are installed — avoids requiring all SDKs as hard dependencies. |
