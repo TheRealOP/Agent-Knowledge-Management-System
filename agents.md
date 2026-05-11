@@ -6,9 +6,9 @@
 
 ## What is this project?
 
-AKMS (Agent Knowledge Management System) is a Python library that gives AI agents **persistent memory** via a knowledge graph. Knowledge is stored as markdown files backed by SQLite — human-readable, git-friendly, and searchable.
+AKMS (Agent Knowledge Management System) gives AI agents **persistent memory** via a knowledge graph. Knowledge is stored as markdown files backed by SQLite — human-readable, git-friendly, and searchable.
 
-You are operating inside a project that uses AKMS. This means there is a `knowledge/` directory containing structured knowledge you can query, and a set of CLI commands you should use before answering domain-specific questions.
+You are operating inside a project that uses AKMS. There is a `knowledge/` directory containing structured knowledge you can query, and a set of CLI commands you should use before answering domain-specific questions.
 
 ---
 
@@ -16,7 +16,7 @@ You are operating inside a project that uses AKMS. This means there is a `knowle
 
 **Before answering a question about a domain topic, check the knowledge graph first.**
 
-Do not guess. Do not hallucinate. If the knowledge graph has relevant nodes, use them. If it doesn't, say so — and optionally flag the gap for the research queue.
+Do not guess. Do not hallucinate. If the knowledge graph has relevant nodes, use them. If it doesn't, say so — and optionally flag the gap via `akms research`.
 
 ---
 
@@ -33,14 +33,12 @@ AKMS exposes all operations as CLI commands. **You don't need any Python integra
 | `akms get section/node-id` | Get the full content of a specific node | When you need the exact content of a known node |
 | `akms sections` | List all available knowledge sections | To discover what knowledge exists |
 | `akms ingest file.md` | Feed a document into the graph via the Librarian | When the user provides new material to learn from |
-| `akms init` | Set up the `knowledge/` directory structure | First-time setup only |
-| `akms status` | Show providers, agent assignments, budget | Diagnostics |
-| `akms budget` | Show today's token usage and cost | Cost monitoring |
-| `akms research` | Show the research queue (knowledge gaps) | To see what's missing |
-| `akms overlay list` | List user understanding scores | To see what the user knows well vs. not |
-| `akms overlay set ID --score 0.7` | Set understanding score for a concept | After the user demonstrates understanding |
+| `akms archive "section" "node-id" "reason"` | Archive a node (move to archives, never delete) | When a node is wrong or outdated |
 | `akms check` | Find broken wikilinks in the graph | Maintenance |
 | `akms council "task" "context"` | Run a 5-role deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) | Complex or ambiguous decisions |
+| `akms init` | Set up the `knowledge/` directory structure | First-time setup only |
+| `akms status` | Show providers and agent assignments | Diagnostics |
+| `akms research` | Show the research queue (knowledge gaps) | To see what's missing |
 
 ### Decision Table: When to Query vs. Answer Directly
 
@@ -85,7 +83,7 @@ Create a file at `knowledge/graph/<section>/<node-id>.md` with this format:
 ---
 id: node-id
 section: section-name
-created: 2026-05-10
+created: 2026-05-11
 tags: [tag1, tag2]
 confidence: 0.9
 sources: []
@@ -140,7 +138,7 @@ Never delete a node directly. Use:
 akms archive "section" "node-id" "Reason for archival"
 ```
 
-This moves the node to `knowledge/archives/` with a reason and timestamp. History is preserved.
+This moves the node to `knowledge/archives/` with proper frontmatter (`archived`, `archive_reason`, `original_section`). History is preserved.
 
 ---
 
@@ -148,17 +146,15 @@ This moves the node to `knowledge/archives/` with a reason and timestamp. Histor
 
 ```
 knowledge/
-├── graph/                          ← Live knowledge nodes
+├── graph/                          ← Live knowledge nodes (source of truth)
 │   ├── distributed-systems/
 │   │   ├── _section.md             ← Section overview (auto-created)
 │   │   ├── cap-theorem.md
 │   │   └── consensus.md
 │   └── machine-learning/
 │       └── transformers.md
-├── archives/                       ← Retired nodes (with archive reason)
-├── logs/                           ← JSONL conversation & token logs
-├── user_overlay/                   ← User understanding scores
-│   └── understanding.json
+├── archives/                       ← Retired nodes (with archive reason + timestamp)
+├── logs/                           ← JSONL conversation logs (Librarian reads these)
 └── research_queue.md               ← Knowledge gaps to investigate
 ```
 
@@ -202,9 +198,10 @@ akms ingest paper.md                   # Feed a document to the Librarian
 akms archive "section" "node" "reason" # Retire a node
 akms check                             # Find broken wikilinks
 
-# Monitoring
-akms status                            # Providers, assignments, budget
-akms budget                            # Today's token usage
+# Complex decisions
+akms council "task description" "context"
+
+# Diagnostics
+akms status                            # Providers, assignments
 akms research                          # Knowledge gaps queue
-akms overlay list                      # User understanding scores
 ```

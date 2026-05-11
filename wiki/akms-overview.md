@@ -3,6 +3,7 @@ title: AKMS Overview
 tags: [akms, overview, what-is]
 category: architecture
 created: 2026-05-10
+updated: 2026-05-11
 ---
 
 # AKMS Overview
@@ -11,25 +12,34 @@ AKMS gives AI agents a persistent memory — a knowledge graph that grows over s
 
 ## The core idea in one sentence
 
-Every conversation you have with an AI agent gets logged, summarized, and stored. The next conversation starts smarter because the agent can look things up from what it learned before.
+Knowledge is stored as markdown nodes in a graph. Expert agents pre-load sections of that graph and answer questions from your IDE agent via CLI commands — no wrappers, no per-IDE integration code.
 
 ## Three things AKMS does
 
-1. **Stores knowledge** — markdown files + SQLite database, human-readable, git-friendly
-2. **Retrieves knowledge** — Expert agents answer domain questions from stored nodes
-3. **Grows knowledge** — the Librarian agent reads your conversation logs and adds new nodes automatically
+1. **Stores knowledge** — markdown files + SQLite index, human-readable, git-friendly
+2. **Retrieves knowledge** — Expert agents pre-load sections and answer queries via `akms ask`
+3. **Grows knowledge** — the Librarian agent reads documents and conversation logs, adds new nodes, uses the Council internally to reason about graph structure
 
-## The three agents
+## The three roles
 
-| Agent | Role | When it runs |
+| Role | Who | What it does |
 |---|---|---|
-| **Executor** | Talks to you, decides when to query experts | Every `akms chat` session |
-| **Expert** | Answers questions from one knowledge section | When Executor calls `query_knowledge` |
-| **Librarian** | Reads logs, updates the graph | After sessions / `akms ingest` |
+| **Agent 1 (Main)** | Your IDE agent (Claude Code, Codex, ...) | Talks to you, does work, queries Experts via `akms` CLI commands |
+| **Agent 2 (Expert)** | `ExpertAgent` — one per section | Pre-loads a knowledge section, answers queries via fork/rollback (no context drift) |
+| **Agent 3 (Manager)** | `LibrarianAgent` | Ingests documents, manages the expert pool, uses Council internally to organize the graph |
+
+## The fork/rollback pattern
+
+Each Expert pre-loads its section into a home state checkpoint (think `--resume`). Every query from Agent 1 creates a throwaway fork, gets answered, and is discarded. The Expert's home state is never mutated — no context drift across queries.
 
 ## Why not just use a plain chatbot?
 
-A plain chatbot forgets everything between sessions. AKMS keeps a graph that compounds — every session leaves behind structured knowledge for the next one.
+A plain chatbot forgets everything between sessions. AKMS keeps a graph that compounds — every session leaves behind structured knowledge for the next one, and any agent can query it with a shell command.
+
+## Storage: markdown + SQLite
+
+- **Markdown** is the source of truth — human-readable, git-friendly, LLM-traversable, wikilink syntax maps directly to graph edges
+- **SQLite** is a derived index — fast search and edge queries when the graph grows large. Always reconstructable from the markdown.
 
 ## See also
 

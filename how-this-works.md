@@ -78,7 +78,7 @@ graph LR
     SrcDir --> Knowledge["📁 knowledge/"]
     SrcDir --> Checkpoints["📁 checkpoints/"]
     SrcDir --> ProvidersDir["📁 providers/"]
-    SrcDir --> Integrations["📁 integrations/"]
+
     SrcDir --> Logging["📁 logging/"]
 
     style Root fill:#1e293b,color:#fff
@@ -96,7 +96,7 @@ graph LR
 | File | Purpose |
 |---|---|
 | `pyproject.toml` | Package metadata, deps (`pyyaml`, `click`, `anthropic`, `openai`, `aiosqlite`), CLI entry point `akms = akms.cli:main` |
-| `akms_config.yaml.example` | Reference config — providers, agent assignments, budget, knowledge paths, expert thresholds |
+| `akms_config.yaml.example` | Reference config — providers, agent assignments, knowledge paths, expert thresholds |
 | `README.md` | Full user-facing docs, CLI reference, Python API examples |
 
 ### `src/akms/` — The Main Package
@@ -104,15 +104,14 @@ graph LR
 | File | Purpose |
 |---|---|
 | `__init__.py` | Exports `__version__` |
-| `cli.py` | Click CLI — `init`, `ingest`, `search`, `ask`, `get`, `sections`, `archive`, `check`, `council`, `status`, `research`, `overlay` commands. `chat` is deprecated (Executor is being removed). |
-| `config.py` | Dataclasses (`ProviderConfig`, `AgentAssignment`, `BudgetConfig`, `KnowledgeConfig`, `ExpertConfig`, `AKMSConfig`) + YAML loader with `${ENV_VAR}` resolution |
+| `cli.py` | Click CLI — `init`, `ingest`, `search`, `ask`, `get`, `sections`, `archive`, `check`, `council`, `status`, `research` commands |
+| `config.py` | Dataclasses (`ProviderConfig`, `AgentAssignment`, `KnowledgeConfig`, `ExpertConfig`, `AKMSConfig`) + YAML loader with `${ENV_VAR}` resolution |
 
 ### `src/akms/agents/`
 
 | File | Class | Purpose |
 |---|---|---|
 | `base.py` | `BaseAgent` | Abstract base — `send()`, `ask()`, `reset()`, token tracking, JSONL logging, session management |
-| `executor.py` | `ExecutorAgent` | **To be removed.** Only used by `akms chat` (deprecated). With CLI-first, the user's IDE agent is Agent 1 — Executor is redundant. |
 | `expert.py` | `ExpertAgent` | Owns one knowledge section — `load_section()` builds system prompt from nodes, `answer()` uses fork/rollback (throwaway conversation branch) |
 | `librarian.py` | `LibrarianAgent` | Knowledge curator — `ingest_log()` extracts insights from JSONL, `digest_document()` chunks markdown by heading, `check_consistency()` finds broken wikilinks, `archive_node()` moves nodes to archives |
 | `council.py` | `CouncilAgent` | 5-role deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) — does NOT extend BaseAgent. Not a top-level CLI agent; used internally by Librarian to reason about knowledge structure. |
@@ -122,7 +121,6 @@ graph LR
 | File | Class | Purpose |
 |---|---|---|
 | `message.py` | `Role`, `Message`, `Response`, `Conversation` | Provider-agnostic message schema — serializable to/from dict, `Conversation.fork_at()` for branching |
-| `budget.py` | `BudgetTracker`, `UsageRecord` | **To be removed.** Budget tracking is out of scope for the core architecture. |
 | `orchestrator.py` | `Orchestrator` | Central coordinator — expert pool cache, dynamic expert scaling (splits large sections into chunk experts), `query_expert()` with keyword-overlap routing for split sections |
 
 ### `src/akms/knowledge/`
@@ -133,7 +131,6 @@ graph LR
 | `db.py` | `SQLiteLayer` | Structured SQLite store — `nodes`, `edges`, `provenance`, `search_index` tables, keyword search via `LIKE` |
 | `graph.py` | `HybridGraph` | Unified facade — writes to both wiki + SQLite, `sync_links()` parses wikilinks into DB edges, delegates search to `GraphSearch` |
 | `search.py` | `GraphSearch` | Tokenized keyword search — splits query into tokens, scores nodes by token-hit count, returns ranked results |
-| `user_overlay.py` | `UserOverlay` | **To be removed.** Per-concept understanding scores are out of scope. |
 | `schema.sql` | — | SQLite DDL for `nodes`, `edges`, `provenance`, `search_index` |
 
 ### `src/akms/checkpoints/`
@@ -156,16 +153,15 @@ graph LR
 | `deepseek.py` | `DeepSeekProvider` | DeepSeek adapter (OpenAI-compatible) |
 | `ollama.py` | `OllamaProvider` | Local Ollama adapter |
 
-### `src/akms/integrations/` — **To be removed**
+### `src/akms/integrations/` — **Deleted**
 
-These wrapper classes are obsolete. The CLI is the universal interface — any agent reads `agents.md` and runs shell commands. No per-IDE wrapper code needed.
+Wrapper classes (`GenericWrapper`, `ClaudeCodeWrapper`, `CodexWrapper`, `OpenCodeWrapper`) have been removed. The CLI is the universal interface — any agent reads `agents.md` and runs shell commands. No per-IDE wrapper code needed.
 
 ### `src/akms/logging/`
 
 | File | Class | Purpose |
 |---|---|---|
 | `conversation_log.py` | `ConversationLogger` | JSONL conversation logger — one file per `{date}_{conversation_id}.jsonl`, organized by agent type |
-| `token_tracker.py` | `TokenTracker` | **To be removed.** Token tracking is out of scope for the core architecture. |
 
 ### `knowledge/` — Runtime Data
 
@@ -516,7 +512,6 @@ flowchart TD
     subgraph Dataclasses
         PC["ProviderConfig"]
         AA["AgentAssignment"]
-        BC["BudgetConfig"]
         KC["KnowledgeConfig"]
         EC["ExpertConfig"]
     end
@@ -546,12 +541,6 @@ flowchart LR
     CLI --> council["council TASK CONTEXT"]
     CLI --> status["status"]
     CLI --> research["research"]
-    CLI --> overlay["overlay"]
-
-    overlay --> olist["list"]
-    overlay --> oset["set CONCEPT --score"]
-    overlay --> oget["get CONCEPT"]
-    overlay --> orem["remove CONCEPT"]
 
     init -->|"Creates"| Dirs["knowledge/ dirs"]
     ingest -->|"Runs"| Librarian["LibrarianAgent"]
@@ -574,7 +563,7 @@ flowchart LR
 
 ## 13. Integration Wrappers — Removed
 
-`src/akms/integrations/` (`GenericWrapper`, `ClaudeCodeWrapper`, `CodexWrapper`, `OpenCodeWrapper`) **will be deleted.**
+`src/akms/integrations/` (`GenericWrapper`, `ClaudeCodeWrapper`, `CodexWrapper`, `OpenCodeWrapper`) **have been deleted.**
 
 These injected AKMS context into agent sessions via Python — a per-IDE maintenance burden. The CLI-first approach makes them redundant: any agent reads `agents.md` and runs shell commands. No wrapper code required.
 
@@ -582,7 +571,7 @@ These injected AKMS context into agent sessions via Python — a per-IDE mainten
 
 ## 14. Conversation Logging
 
-`TokenTracker` and `BudgetTracker` will be removed. Conversation logging stays — it's the input for Librarian's `ingest_log()`.
+`TokenTracker` and `BudgetTracker` have been removed. Conversation logging stays — it's the input for Librarian's `ingest_log()`.
 
 ```mermaid
 flowchart LR

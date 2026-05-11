@@ -1,6 +1,6 @@
 # Agent Knowledge Management System (AKMS)
 
-A Python library that gives AI agents **persistent memory**. Every conversation is logged, summarized, and stored in a knowledge graph. The next session starts smarter.
+A Python library that gives AI agents **persistent memory**. Knowledge is stored in a graph that grows across sessions. Any agent that can run a shell command can query it — no wrappers, no per-IDE integration code.
 
 Works with Claude, GPT-4, Gemini, DeepSeek, or local Ollama models — swap providers without changing code.
 
@@ -16,7 +16,7 @@ pip install -e .
 
 ### 2. Create `akms_config.yaml`
 
-You only need **one** API key to get started. Here's the minimal config with Claude:
+You only need **one** API key to get started:
 
 ```yaml
 providers:
@@ -26,43 +26,28 @@ providers:
       - claude-sonnet-4-6
 
 agent_assignments:
-  executor:   { provider: claude, model: claude-sonnet-4-6 }
   expert:     { provider: claude, model: claude-sonnet-4-6 }
   librarian:  { provider: claude, model: claude-sonnet-4-6 }
-  council:    { provider: claude, model: claude-sonnet-4-6 }
-
-budget:
-  daily_limit_usd: 5.00
-  track_tokens: true
-  token_log_path: "knowledge/logs/token_usage.json"
 
 knowledge:
   graph_dir: "knowledge/graph"
   archives_dir: "knowledge/archives"
-  user_overlay_dir: "knowledge/user_overlay"
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
   checkpoints_db_path: "knowledge/checkpoints.db"
 ```
 
-Set your API key in the shell:
-
 ```bash
 export CLAUDE_API_KEY="sk-ant-..."
 ```
 
-### 3. Initialize and chat
+### 3. Initialize and start querying
 
 ```bash
-akms init    # creates the knowledge/ directory
-akms chat    # start talking
-```
-
-The knowledge graph is empty at first. Feed it by ingesting documents:
-
-```bash
-akms ingest my-notes.md
-akms ingest research-paper.pdf.txt
+akms init                          # create the knowledge/ directory
+akms ingest my-notes.md            # feed documents to the Librarian
+akms search "consensus algorithms" # search the graph
+akms ask "distributed-systems" "How does Raft work?"
 ```
 
 ---
@@ -72,11 +57,11 @@ akms ingest research-paper.pdf.txt
 - [How It Works](#how-it-works)
 - [CLI Reference](#cli-reference)
 - [Knowledge Graph](#knowledge-graph)
-- [The Three Agents](#the-three-agents)
+- [The Three Roles](#the-three-roles)
 - [Configuration Reference](#configuration-reference)
 - [Provider Support](#provider-support)
 - [Python API](#python-api)
-- [Budget & Token Tracking](#budget--token-tracking)
+- [Dynamic Expert Scaling](#dynamic-expert-scaling)
 - [Project Structure](#project-structure)
 
 ---
@@ -84,29 +69,21 @@ akms ingest research-paper.pdf.txt
 ## How It Works
 
 ```
-You ──► akms chat ──► Executor
-                         │
-              calls query_knowledge
-                         │
-                      Expert Agent
-                  (reads one section,
-                   answers, discards
-                   conversation fork)
-                         │
-                    answer back
-                         │
-                      Executor
-                  (continues response)
-
-After session:
-  Librarian reads logs ──► updates knowledge graph
+Your IDE agent (Agent 1)
+   │
+   ├── akms search "query"      ──► knowledge graph (SQLite index)
+   ├── akms ask "section" "q"   ──► Expert agent (pre-loaded section)
+   │                                   │
+   │                           fork/rollback per query
+   │                           (home state never mutated)
+   │
+   └── akms ingest doc.md       ──► Librarian agent ──► knowledge graph
 ```
 
-1. You chat with the **Executor** agent
-2. When the Executor needs stored knowledge, it calls `query_knowledge(section, question)` automatically
-3. An **Expert** agent wakes up, reads its section, answers in compressed form, then discards the conversation (fork/rollback — no context bloat)
-4. After sessions, the **Librarian** reads logs and adds new nodes to the graph
-5. Every session leaves the graph richer
+1. **Agent 1** (your IDE agent) reads `agents.md` and calls `akms` commands as shell skills
+2. **Expert agents** pre-load knowledge sections into memory. Each query from Agent 1 creates a throwaway fork — answered and discarded. No context drift.
+3. **The Librarian** (Agent 3) reads documents and conversation logs, adds nodes to the graph, uses the Council internally to reason about graph structure
+4. Every session leaves the graph richer for the next
 
 ---
 
@@ -124,26 +101,6 @@ Creates `knowledge/graph/`, `knowledge/logs/`, `knowledge/archives/`, `knowledge
 
 ---
 
-### `akms chat`
-
-Start an interactive chat session. The Executor agent has access to your full knowledge graph.
-
-```bash
-akms chat
-```
-
-```
-AKMS Chat (executor/claude-sonnet-4-6) — type 'quit' to exit
-
-You> What does CAP theorem say about our database design?
-Assistant> Based on the knowledge graph, your system is an AP design...
-
-You> quit
-Goodbye.
-```
-
----
-
 ### `akms ingest <file>`
 
 Feed a document into the knowledge graph. The Librarian reads it, chunks by heading, and creates nodes.
@@ -157,92 +114,102 @@ Ingesting: papers/distributed-systems-primer.md
 Done. 7 node(s) added to knowledge graph.
 ```
 
-Supports markdown and plain text files.
+---
+
+### `akms search <query>`
+
+Search the knowledge graph and return ranked results.
+
+```bash
+akms search "consensus algorithms"
+akms search "leader election" --top-k 5
+akms search "Raft" --json
+```
+
+---
+
+### `akms ask <section> <question>`
+
+Route a question to the Expert agent for a section. The Expert pre-loads its section, answers via fork/rollback, and returns a compressed answer.
+
+```bash
+akms ask "distributed-systems" "How does Raft handle leader election?"
+```
+
+---
+
+### `akms get <section/node-id>`
+
+Get the full content of a specific node.
+
+```bash
+akms get distributed-systems/raft
+akms get distributed-systems/raft --json
+```
+
+---
+
+### `akms sections`
+
+List all available knowledge sections and node counts.
+
+```bash
+akms sections
+akms sections --json
+```
+
+---
+
+### `akms archive <section> <node-id> <reason>`
+
+Archive a node — moves it to `knowledge/archives/` with proper metadata. Never delete nodes directly.
+
+```bash
+akms archive "distributed-systems" "old-raft-notes" "Superseded by raft-consensus node"
+```
+
+---
+
+### `akms check`
+
+Find broken wikilinks across the knowledge graph.
+
+```bash
+akms check
+akms check --json
+```
+
+---
+
+### `akms council <task> [context]`
+
+Run a 5-role Council deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) and return a recommendation.
+
+```bash
+akms council "Should we use eventual or strong consistency?" "10M users, rare writes"
+akms council "task" "context" --detailed   # show all 5 perspectives
+akms council "task" "context" --json
+```
 
 ---
 
 ### `akms status`
 
-Show configured providers, agent assignments, and budget settings.
+Show configured providers and agent assignments.
 
 ```bash
 akms status
 ```
 
-```
-AKMS v0.1.0
-
-Configured providers:
-  claude: key=✓  models=['claude-sonnet-4-6']  (loaded)
-
-Agent assignments:
-  executor: claude/claude-sonnet-4-6
-  expert:   claude/claude-sonnet-4-6
-
-Budget:
-  Daily limit: $5.00
-  Token tracking: True
-```
-
----
-
-### `akms budget`
-
-Show today's token usage and cost.
-
-```bash
-akms budget
-```
-
-```
-Today's usage: 12,450 tokens  $0.0312
-
-  claude: $0.0312
-```
-
-> **Note:** `cost_usd` is always `$0.00` — no pricing table is implemented. Token counts are accurate. See [Known Limitations](#known-limitations).
-
----
-
-### `akms overlay` — User Understanding Overlays
-
-Track your personal understanding score for knowledge concepts (0.0 = unknown, 1.0 = expert).
-
-```bash
-# List all tracked concepts with scores
-akms overlay list
-
-# Set understanding score for a concept
-akms overlay set cap-theorem --score 0.7 --notes "Understand C/A/P tradeoff but not formal proof"
-
-# Get a specific concept
-akms overlay get cap-theorem
-
-# Remove a concept
-akms overlay remove cap-theorem
-```
-
-Overlay data is stored in `knowledge/user_overlay/understanding.json`. Understanding scores are clamped to [0.0, 1.0].
-
 ---
 
 ### `akms research`
 
-Show the research queue — knowledge gaps the Librarian flagged.
+Show the research queue — knowledge gaps flagged by the Librarian.
 
 ```bash
 akms research
 ```
-
-```
-## Pending (Awaiting Approval)
-- [ ] "Raft consensus" — gap in distributed-systems section
-
-## Completed
-- [x] "Paxos algorithm" — integrated 2026-05-08, 3 nodes created
-```
-
-To approve a topic, edit `knowledge/research_queue.md` and change `- [ ]` to `- [x]`.
 
 ---
 
@@ -268,7 +235,7 @@ knowledge/graph/
 ---
 id: cap-theorem
 section: distributed-systems
-created: 2026-05-10
+created: 2026-05-11
 tags: [consistency, availability, partition-tolerance]
 confidence: 0.92
 sources: []
@@ -283,7 +250,7 @@ Consistency, Availability, Partition tolerance.
 - [[consensus]] — CAP defines the tradeoff space
 ```
 
-`[[wikilinks]]` create graph edges between nodes.
+`[[wikilinks]]` create graph edges between nodes. Markdown is the source of truth — SQLite is a derived index for fast search and routing.
 
 ### Adding nodes manually
 
@@ -299,51 +266,37 @@ print(f'Synced {g.sync_links()} wikilinks')
 "
 ```
 
-### Searching
-
-```python
-from akms.config import load_config
-from akms.knowledge import HybridGraph
-
-graph = HybridGraph(load_config().knowledge)
-for node, score in graph.search("consensus algorithms", top_k=5):
-    print(f"[{score:.1f}] {node['title']} ({node['section']})")
-```
-
 ---
 
-## The Three Agents
+## The Three Roles
 
-### Executor — the agent you talk to
+### Agent 1 — your IDE agent
 
-Receives your questions, decides when to query experts, builds the final response.
+Your Claude Code session, Codex, or any agent that can run shell commands. It reads `agents.md` to learn the available `akms` commands and calls them as skills. AKMS provides no dedicated "chat" agent — your IDE is already Agent 1.
 
-Uses this tool call internally (you don't need to write it):
-```json
-{"tool": "query_knowledge", "section": "distributed-systems", "question": "how does Raft handle leader election?"}
-```
+### Agent 2 — Expert (knowledge retrieval)
 
-### Expert — domain knowledge retrieval
-
-One Expert per knowledge section. Each Expert answers from its section in compressed form:
+One Expert per knowledge section. Experts pre-load their section into a home state checkpoint. Each query from Agent 1 creates a throwaway conversation fork — answered and discarded. The home state is never mutated.
 
 ```
-Raft: leader-based. One leader elected per term. Handles failures via heartbeat timeout.
-See: graph:distributed-systems/raft, graph:distributed-systems/consensus
-Confidence: 0.9
+Expert home state:  [system prompt + all section nodes]  ← checkpoint
+                              │
+         query arrives ──► fork ──► answer ──► discard fork
+                              │
+                    home state unchanged
 ```
 
-Experts use **fork/rollback**: each Q&A is a throwaway conversation branch. The Expert's home state stays clean — no accumulated context drift across queries.
+This is the fork/rollback pattern — think of the home state as a `--resume` point. No context drift across queries.
 
-### Librarian — knowledge curation
+### Agent 3 — Librarian (knowledge curation)
 
-Runs after sessions or when you call `akms ingest`. Reads logs and documents, extracts structured knowledge, adds nodes to the graph, and flags gaps for the research queue.
+Runs when you call `akms ingest` or after sessions via `ingest_log()`. Reads documents, extracts structured knowledge, and adds nodes. Uses the Council internally to reason about graph structure before writing — the Council is not exposed as a top-level CLI command.
 
 ---
 
 ## Configuration Reference
 
-### Minimal (Claude only)
+### Minimal (one provider)
 
 ```yaml
 providers:
@@ -353,28 +306,18 @@ providers:
       - claude-sonnet-4-6
 
 agent_assignments:
-  executor:   { provider: claude, model: claude-sonnet-4-6 }
   expert:     { provider: claude, model: claude-sonnet-4-6 }
   librarian:  { provider: claude, model: claude-sonnet-4-6 }
-  council:    { provider: claude, model: claude-sonnet-4-6 }
-
-budget:
-  daily_limit_usd: 5.00
-  track_tokens: true
-  token_log_path: "knowledge/logs/token_usage.json"
 
 knowledge:
   graph_dir: "knowledge/graph"
   archives_dir: "knowledge/archives"
-  user_overlay_dir: "knowledge/user_overlay"
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
   checkpoints_db_path: "knowledge/checkpoints.db"
 ```
 
-### Full (multiple providers, different agents)
-
-Use different providers for different agent roles — e.g., cheap/fast for Experts, powerful for Executor:
+### Multi-provider (different agents on different models)
 
 ```yaml
 providers:
@@ -386,45 +329,26 @@ providers:
     api_key: "${OPENAI_API_KEY}"
     models: [gpt-4o]
 
-  gemini:
-    api_key: "${GEMINI_API_KEY}"
-    models: [gemini-2.5-pro]
-
-  deepseek:
-    api_key: "${DEEPSEEK_API_KEY}"
-    models: [deepseek-chat]
-
   ollama:
-    base_url: "http://localhost:11434"   # no API key
+    base_url: "http://localhost:11434"
     models: [llama3, mistral]
 
 agent_assignments:
-  executor:   { provider: claude, model: claude-opus-4-7 }
   expert:     { provider: openai, model: gpt-4o }
   librarian:  { provider: claude, model: claude-sonnet-4-6 }
-  council:    { provider: openai, model: gpt-4o }
 
-budget:
-  daily_limit_usd: 10.00
-  per_query_warn_usd: 0.50
-  track_tokens: true
-  token_log_path: "knowledge/logs/token_usage.json"
+expert:
+  token_threshold: 50000   # sections larger than this are split into chunk experts
 
 knowledge:
   graph_dir: "knowledge/graph"
   archives_dir: "knowledge/archives"
-  user_overlay_dir: "knowledge/user_overlay"
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
   checkpoints_db_path: "knowledge/checkpoints.db"
 ```
 
-API keys are never stored in the file — always use environment variables:
-
-```bash
-export CLAUDE_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-..."
-```
+API keys are never stored in the file — always use environment variables.
 
 ---
 
@@ -438,7 +362,7 @@ export OPENAI_API_KEY="sk-..."
 | Google Gemini | `pip install -e ".[gemini]"` | |
 | Ollama (local) | `pip install -e ".[ollama]"` + run Ollama | No API key |
 
-Switching providers: change `agent_assignments` in the config, no code changes needed.
+Switching providers: change `agent_assignments` in the config. No code changes needed.
 
 ---
 
@@ -450,7 +374,7 @@ Switching providers: change `agent_assignments` in the config, no code changes n
 from akms.config import load_config
 from akms.providers.registry import build_default_registry
 from akms.knowledge import HybridGraph
-from akms.checkpoints import CheckpointStore
+from akms.checkpoints.store import CheckpointStore
 from akms.core.orchestrator import Orchestrator
 
 config = load_config()
@@ -494,26 +418,12 @@ answer = orchestrator.query_expert(
 print(answer)
 ```
 
-### Run the Executor
-
-```python
-from akms.agents.executor import ExecutorAgent
-
-provider = registry.create_from_config("claude", config.providers["claude"])
-executor = ExecutorAgent(
-    provider=provider,
-    model=config.agent_assignments["executor"].model,
-    config=config,
-)
-response = executor.run("Explain CAP theorem's impact on our DB choice", orchestrator=orchestrator)
-print(response)
-```
-
 ### Use the Librarian
 
 ```python
 from akms.agents.librarian import LibrarianAgent
 
+provider = registry.create_from_config("claude", config.providers["claude"])
 librarian = LibrarianAgent(provider=provider, model="claude-sonnet-4-6", config=config)
 
 # Ingest a document
@@ -534,14 +444,13 @@ from akms.agents.council import CouncilAgent
 
 council = CouncilAgent(provider=provider, model="claude-sonnet-4-6", config=config)
 
-# Get a synthesized recommendation
 result = council.convene(
     task="Should we use eventual or strong consistency for user profiles?",
     context="10M users, rare writes, very frequent reads"
 )
 print(result)
 
-# Get all 5 perspectives (Advocate, Critic, Historian, Innovator, Synthesizer)
+# All 5 perspectives (Advocate, Critic, Historian, Innovator, Synthesizer)
 detailed = council.convene_detailed(task="...", context="...")
 for role, perspective in detailed.items():
     print(f"\n## {role}\n{perspective}")
@@ -549,29 +458,27 @@ for role, perspective in detailed.items():
 
 ---
 
-## Budget & Token Tracking
+## Dynamic Expert Scaling
 
-```python
-from akms.core.budget import BudgetTracker
+For sections exceeding `expert.token_threshold` tokens, AKMS automatically splits the section into chunk experts:
 
-tracker = BudgetTracker()
-tracker.record_usage("claude", "sonnet", tokens_in=500, tokens_out=200, cost_usd=0.012)
-
-print(tracker.daily_total_usd())     # e.g. 0.012
-print(tracker.is_over_limit(5.0))    # True if >= $5
-print(tracker.summary())             # breakdown by provider
+```yaml
+expert:
+  token_threshold: 50000
 ```
 
+- Single sections: pooled under `"section-name"`
+- Split sections: `"section-name:0"`, `"section-name:1"`, ...
+- Sentinel key `"section-name:__split__"` stores the chunk list
+- Query routing: question is tokenized, scored against each chunk by keyword overlap, top-2 chunks are queried and answers concatenated
+
 ```python
-from akms.logging import TokenTracker
+# Force-recreate an expert (evicts cached instance)
+orc.spawn_expert("distributed-systems")
 
-tt = TokenTracker("knowledge/logs/token_usage.json")
-tt.log("claude", "sonnet", tokens=700, cost_usd=0.014)
-
-today = tt.load_today()
+# Reload only if already cached
+orc.refresh_expert("distributed-systems")
 ```
-
-CLI shortcut: `akms budget`
 
 ---
 
@@ -579,176 +486,45 @@ CLI shortcut: `akms budget`
 
 ```
 akms/
-├── akms_config.yaml.example     ← reference config (copy to akms_config.yaml)
+├── akms_config.yaml.example     ← reference config
+├── agents.md                    ← agent instructions (read this to use AKMS)
+├── how-this-works.md            ← architecture deep-dive with diagrams
 ├── src/akms/
-│   ├── cli.py                   ← akms command (chat, ingest, overlay, budget, …)
-│   ├── config.py                ← config loading (ExpertConfig, AKMSConfig, …)
+│   ├── cli.py                   ← akms command entry point
+│   ├── config.py                ← AKMSConfig, KnowledgeConfig, ExpertConfig
 │   ├── agents/
-│   │   ├── base.py              ← BaseAgent (send, ask, token tracking, logging)
-│   │   ├── executor.py          ← main chat agent
-│   │   ├── expert.py            ← knowledge retrieval (fork/rollback, load_nodes)
-│   │   ├── librarian.py         ← knowledge curation (spawn_expert, refresh_expert)
-│   │   └── council.py           ← 5-role deliberation
+│   │   ├── base.py              ← BaseAgent (send, ask, logging)
+│   │   ├── expert.py            ← Expert agent (fork/rollback, load_section)
+│   │   ├── librarian.py         ← Librarian agent (ingest, check, archive)
+│   │   └── council.py           ← 5-role deliberation (Librarian's internal tool)
 │   ├── core/
-│   │   ├── message.py           ← provider-agnostic message type
-│   │   ├── budget.py            ← cost tracking
-│   │   └── orchestrator.py      ← agent coordination, dynamic expert scaling
+│   │   ├── message.py           ← provider-agnostic message types
+│   │   └── orchestrator.py      ← expert pool, dynamic splitting, query routing
 │   ├── knowledge/
-│   │   ├── wiki.py              ← markdown layer
-│   │   ├── db.py                ← SQLite layer
-│   │   ├── graph.py             ← unified interface
-│   │   ├── search.py            ← keyword search
-│   │   └── user_overlay.py      ← user understanding overlays (JSON)
+│   │   ├── wiki.py              ← markdown layer (source of truth)
+│   │   ├── db.py                ← SQLite layer (derived index)
+│   │   ├── graph.py             ← unified HybridGraph facade
+│   │   └── search.py            ← keyword search
 │   ├── checkpoints/
-│   │   ├── store.py             ← save/load conversations
-│   │   └── fork.py              ← fork/rollback for Expert agents
+│   │   ├── store.py             ← checkpoint persistence (SQLite)
+│   │   └── fork.py              ← fork/rollback helpers
 │   ├── providers/               ← claude, openai, gemini, deepseek, ollama
-│   ├── integrations/
-│   │   ├── generic.py           ← GenericWrapper: AKMS system prompt injection
-│   │   ├── claude_code.py       ← ClaudeCodeWrapper
-│   │   ├── codex.py             ← CodexWrapper (OpenAI Codex)
-│   │   └── opencode.py          ← OpenCodeWrapper
 │   └── logging/
-│       ├── conversation_log.py  ← JSONL conversation logger
-│       └── token_tracker.py     ← token + cost logger
+│       └── conversation_log.py  ← JSONL conversation logger
 ├── knowledge/                   ← created by akms init
-└── tests/                       ← unit, integration, edge case tests (pytest)
+└── tests/                       ← pytest suite
 ```
 
 ---
 
 ## Tips
 
-**You only need one API key.** Start with Claude or OpenAI alone — use the minimal config above and expand later.
+**You only need one API key.** Start with Claude or OpenAI alone and expand later.
 
-**Start small.** Run `akms init`, ingest one document, then `akms chat`. Don't try to build a large graph before testing the flow.
+**Start small.** Run `akms init`, ingest one document, then `akms search` or `akms ask`. Don't build a large graph before testing the flow.
 
 **Sections are directories — pick a naming convention.** `distributed-systems` and `distributed_systems` are different sections. Stick with `kebab-case`.
 
-**Archive, don't delete.** Use `librarian.archive_node()` to mark something wrong — it moves to `knowledge/archives/` with a reason. The history is preserved.
+**Archive, don't delete.** Use `akms archive` or `librarian.archive_node()` — the node moves to `knowledge/archives/` with a reason and timestamp. History is preserved.
 
-**Keep the daily limit low while experimenting.** Set `daily_limit_usd: 1.00` until you know your usage patterns.
-
----
-
-## Integrations
-
-AKMS includes wrapper classes that inject knowledge graph capabilities into existing tool sessions.
-
-### GenericWrapper
-
-Base class for all integrations. Prepends an AKMS system prompt to every message, listing available sections and explaining the `query_knowledge` tool call protocol.
-
-```python
-from akms.integrations import GenericWrapper
-
-wrapper = GenericWrapper(orchestrator=orc)
-response = wrapper.run("What patterns does this codebase use?", provider=provider, model="gpt-4o")
-```
-
-### ClaudeCodeWrapper
-
-Optimized for Claude Code sessions — references knowledge paths as `graph:section/node-id`.
-
-```python
-from akms.integrations import ClaudeCodeWrapper
-
-wrapper = ClaudeCodeWrapper(orchestrator=orc)
-```
-
-### CodexWrapper
-
-Optimized for OpenAI Codex — prefers brief, structured answers and code-related graph lookups.
-
-```python
-from akms.integrations import CodexWrapper
-
-wrapper = CodexWrapper(orchestrator=orc)
-```
-
-### OpenCodeWrapper
-
-Optimized for OpenCode — checks project conventions and architectural decisions before suggesting code changes.
-
-```python
-from akms.integrations import OpenCodeWrapper
-
-wrapper = OpenCodeWrapper(orchestrator=orc)
-```
-
-All wrappers call `provider.chat()` directly and handle multi-round tool call loops internally (up to 5 rounds).
-
----
-
-## Dynamic Expert Scaling
-
-For knowledge sections whose content exceeds `expert.token_threshold` tokens, AKMS automatically splits the section into chunk experts:
-
-```yaml
-expert:
-  token_threshold: 50000  # tokens per Expert; sections larger than this are split
-```
-
-**Pool keying scheme:**
-- Single-expert sections: stored under `"{section}"` (unchanged behavior)
-- Split sections: chunk experts stored under `"{section}:0"`, `"{section}:1"`, etc.
-- Sentinel key `"{section}:__split__"` stores the list of chunk keys
-
-**Query routing for split sections:**
-- `query_expert()` tokenizes the question and scores each chunk by keyword overlap with its node IDs and tags
-- The top-2 scoring chunks are queried; their answers are concatenated
-
-**Expert management:**
-
-```python
-# Force-recreate an expert (evicts cached instance)
-orc.spawn_expert("distributed-systems")
-
-# Reload only if already cached (returns None if not in pool)
-orc.refresh_expert("distributed-systems")
-
-# Via Librarian (delegates to Orchestrator — Librarian never touches the pool directly)
-librarian.spawn_expert("distributed-systems", orc)
-librarian.refresh_expert("distributed-systems", orc)
-```
-
----
-
-## User Understanding Overlays
-
-Track your personal understanding of knowledge graph concepts. Stored in `knowledge/user_overlay/understanding.json`.
-
-```python
-from akms.knowledge import UserOverlay
-
-uo = UserOverlay("knowledge/user_overlay")
-
-uo.set_concept("raft-consensus", 0.8, "Understand leader election, not log compaction")
-data = uo.get_concept("raft-consensus")
-# {"understanding": 0.8, "last_reviewed": "2026-05-10", "notes": "..."}
-
-concepts = uo.list_concepts()
-uo.remove_concept("raft-consensus")
-```
-
-Understanding scores are clamped to [0.0, 1.0]. Missing files are handled gracefully (return empty concepts).
-
----
-
-## Known Limitations
-
-### `cost_usd` is always `0.00`
-
-No pricing table is implemented across any provider. `cost_usd` in every `Response` is always `0.0`. Token counts are accurate — cost tracking requires a future implementation that maps (provider, model) to per-token prices.
-
-### CouncilAgent bypasses token tracking
-
-`CouncilAgent` does not inherit from `BaseAgent` — it calls `provider.chat()` directly. Its LLM calls are not tracked by `BaseAgent.send()` and therefore not recorded in the token log. Fixing this requires making `CouncilAgent` extend `BaseAgent`.
-
-### GenericWrapper and subclasses bypass token tracking
-
-`GenericWrapper`, `ClaudeCodeWrapper`, `CodexWrapper`, and `OpenCodeWrapper` call `provider.chat()` directly in their `run()` method. Their LLM calls are not tracked. This is a known gap in the same category as `CouncilAgent`.
-
-### ExpertAgent fork calls bypass token tracking
-
-`ExpertAgent.answer()` calls `provider.chat()` directly by design — forks are throwaway conversation branches and must not mutate history. Expert Q&A pairs are logged to JSONL for Librarian ingestion, but the token counts for those calls are not tracked in the token log.
+**Markdown is the source of truth.** The SQLite database is a derived index — always reconstructable from the markdown files. Commit the `knowledge/graph/` directory to git.
