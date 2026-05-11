@@ -336,25 +336,30 @@ def sections(ctx: click.Context, as_json: bool) -> None:
 @click.pass_context
 def archive(ctx: click.Context, section: str, node_id: str, reason: str) -> None:
     """Archive a node — moves it out of the live graph."""
-    import shutil
-    from pathlib import Path
-
     config = ctx.obj["config"]
-    graph = _build_graph(config)
+    registry = ctx.obj["registry"]
 
-    node = graph.get_node(section, node_id)
-    if node is None:
-        click.echo(f"Node '{section}/{node_id}' not found.", err=True)
+    assignment = config.agent_assignments.get("librarian")
+    if not assignment:
+        click.echo("Error: no 'librarian' assignment in agent_assignments", err=True)
         raise SystemExit(1)
 
-    src = Path(config.knowledge.graph_dir) / section / f"{node_id}.md"
-    dest_dir = Path(config.knowledge.archives_dir) / section
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{node_id}.md"
+    provider_cfg = config.providers.get(assignment.provider)
+    if not provider_cfg:
+        click.echo(f"Error: provider '{assignment.provider}' not configured", err=True)
+        raise SystemExit(1)
 
-    shutil.move(str(src), str(dest))
-    graph.sqlite.delete_node(node_id)
-    click.echo(f"Archived {section}/{node_id} → {dest}  (reason: {reason})")
+    from akms.agents.librarian import LibrarianAgent
+
+    graph = _build_graph(config)
+    provider = registry.create_from_config(assignment.provider, provider_cfg)
+    librarian = LibrarianAgent(provider=provider, model=assignment.model, config=config)
+
+    ok = librarian.archive_node(section, node_id, reason, graph)
+    if not ok:
+        click.echo(f"Node '{section}/{node_id}' not found.", err=True)
+        raise SystemExit(1)
+    click.echo(f"Archived {section}/{node_id}  (reason: {reason})")
 
 
 @main.command()
@@ -365,33 +370,35 @@ def check(ctx: click.Context, as_json: bool) -> None:
     import json as _json
 
     config = ctx.obj["config"]
+    registry = ctx.obj["registry"]
+
+    assignment = config.agent_assignments.get("librarian")
+    if not assignment:
+        click.echo("Error: no 'librarian' assignment in agent_assignments", err=True)
+        raise SystemExit(1)
+
+    provider_cfg = config.providers.get(assignment.provider)
+    if not provider_cfg:
+        click.echo(f"Error: provider '{assignment.provider}' not configured", err=True)
+        raise SystemExit(1)
+
+    from akms.agents.librarian import LibrarianAgent
+
     graph = _build_graph(config)
+    provider = registry.create_from_config(assignment.provider, provider_cfg)
+    librarian = LibrarianAgent(provider=provider, model=assignment.model, config=config)
 
-    all_node_ids: set[str] = set()
-    for s in graph.list_sections():
-        for nid in graph.list_nodes(s):
-            all_node_ids.add(nid)
-
-    broken: list[dict] = []
-    for s in graph.list_sections():
-        for nid in graph.list_nodes(s):
-            node = graph.get_node(s, nid)
-            if node is None:
-                continue
-            for target in node.get("wikilinks", []):
-                target_id = target.split("/")[-1]
-                if target_id not in all_node_ids:
-                    broken.append({"source": f"{s}/{nid}", "broken_link": target})
+    issues = librarian.check_consistency(graph)
 
     if as_json:
-        click.echo(_json.dumps(broken, indent=2))
+        click.echo(_json.dumps(issues, indent=2))
     else:
-        if not broken:
+        if not issues:
             click.echo("No broken wikilinks found.")
             return
-        click.echo(f"{len(broken)} broken wikilink(s):")
-        for item in broken:
-            click.echo(f"  {item['source']}  →  [[{item['broken_link']}]]")
+        click.echo(f"{len(issues)} broken wikilink(s):")
+        for item in issues:
+            click.echo(f"  {item['section']}/{item['node_id']}  →  [[{item['broken_link']}]]")
 
 
 @main.command()
