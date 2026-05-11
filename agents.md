@@ -35,7 +35,6 @@ AKMS exposes all operations as CLI commands. **You don't need any Python integra
 | `akms ingest file.md` | Feed a document into the graph via the Librarian | When the user provides new material to learn from |
 | `akms archive "section" "node-id" "reason"` | Archive a node (move to archives, never delete) | When a node is wrong or outdated |
 | `akms check` | Find broken wikilinks in the graph | Maintenance |
-| `akms council "task" "context"` | Run a 5-role deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) | Complex or ambiguous decisions |
 | `akms init` | Set up the `knowledge/` directory structure | First-time setup only |
 | `akms status` | Show providers and agent assignments | Diagnostics |
 | `akms research` | Show the research queue (knowledge gaps) | To see what's missing |
@@ -197,9 +196,6 @@ akms get distributed-systems/raft      # Full node content
 akms ingest paper.md                   # Feed a document to the Librarian
 akms archive "section" "node" "reason" # Retire a node
 akms check                             # Find broken wikilinks
-
-# Complex decisions
-akms council "task description" "context"
 
 # Diagnostics
 akms status                            # Providers, assignments

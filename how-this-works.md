@@ -16,7 +16,6 @@ graph TB
         Orchestrator["⚙️ Orchestrator\n(routing & expert pool)"]
         Expert["🤖 Expert Agent(s)"]
         Librarian["🤖 Librarian Agent"]
-        Council["🤖 Council Agent"]
         CLI --> Orchestrator
     end
 
@@ -28,12 +27,10 @@ graph TB
     AnyAgent -->|"reads agents.md\nruns shell commands"| CLI
     Orchestrator -->|"ask"| Expert
     Orchestrator -->|"ingest"| Librarian
-    Orchestrator -->|"council"| Council
     Expert -->|"reads nodes"| KG
     Librarian -->|"writes nodes"| KG
     Expert -->|"chat()"| Providers
     Librarian -->|"chat()"| Providers
-    Council -->|"chat()"| Providers
     Expert -->|"fork/rollback"| CP
     Providers -->|"powers"| AnyAgent
 
@@ -47,7 +44,6 @@ graph TB
     style Providers fill:#ef4444,color:#fff
     style Expert fill:#10b981,color:#fff
     style Librarian fill:#f59e0b,color:#000
-    style Council fill:#ef4444,color:#fff
 ```
 
 > [!IMPORTANT]
@@ -104,7 +100,7 @@ graph LR
 | File | Purpose |
 |---|---|
 | `__init__.py` | Exports `__version__` |
-| `cli.py` | Click CLI — `init`, `ingest`, `search`, `ask`, `get`, `sections`, `archive`, `check`, `council`, `status`, `research` commands |
+| `cli.py` | Click CLI — `init`, `ingest`, `search`, `ask`, `get`, `sections`, `archive`, `check`, `status`, `research` commands |
 | `config.py` | Dataclasses (`ProviderConfig`, `AgentAssignment`, `KnowledgeConfig`, `ExpertConfig`, `AKMSConfig`) + YAML loader with `${ENV_VAR}` resolution |
 
 ### `src/akms/agents/`
@@ -114,7 +110,6 @@ graph LR
 | `base.py` | `BaseAgent` | Abstract base — `send()`, `ask()`, `reset()`, token tracking, JSONL logging, session management |
 | `expert.py` | `ExpertAgent` | Owns one knowledge section — `load_section()` builds system prompt from nodes, `answer()` uses fork/rollback (throwaway conversation branch) |
 | `librarian.py` | `LibrarianAgent` | Knowledge curator — `ingest_log()` extracts insights from JSONL, `digest_document()` chunks markdown by heading, `check_consistency()` finds broken wikilinks, `archive_node()` moves nodes to archives |
-| `council.py` | `CouncilAgent` | 5-role deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) — does NOT extend BaseAgent. Not a top-level CLI agent; used internally by Librarian to reason about knowledge structure. |
 
 ### `src/akms/core/`
 
@@ -368,11 +363,9 @@ graph TB
         Base["BaseAgent (ABC)"]
         Exp["ExpertAgent\n(Agent 2)"]
         Lib["LibrarianAgent\n(Agent 3)"]
-        Coun["CouncilAgent\n(internal tool)"]
 
         Base --> Exp
         Base --> Lib
-        Lib -.->|"uses internally"| Coun
     end
 
     IDE -->|"akms ask / search / get"| Exp
@@ -382,17 +375,13 @@ graph TB
     style Base fill:#6366f1,color:#fff
     style Exp fill:#10b981,color:#fff
     style Lib fill:#f59e0b,color:#000
-    style Coun fill:#ef4444,color:#fff
 ```
 
 | Role | Who | Responsibility |
 |---|---|---|
 | **Agent 1** | User's IDE agent | Talks to the user, does work, queries Expert via CLI |
 | **Agent 2** | `ExpertAgent` | Pre-loads a section, answers queries via fork/rollback |
-| **Agent 3** | `LibrarianAgent` | Ingests knowledge, manages expert pool, uses Council internally to reason about graph structure |
-| *(internal)* | `CouncilAgent` | 5-role deliberation tool — called by Librarian, not exposed directly via CLI |
-
-> `CouncilAgent` does **not** extend `BaseAgent` — it calls `provider.chat()` directly with no shared history.
+| **Agent 3** | `LibrarianAgent` | Ingests knowledge, manages expert pool |
 
 ### BaseAgent Responsibilities
 
@@ -538,7 +527,6 @@ flowchart LR
     CLI --> sections["sections"]
     CLI --> archive["archive SECTION NODE REASON"]
     CLI --> check["check"]
-    CLI --> council["council TASK CONTEXT"]
     CLI --> status["status"]
     CLI --> research["research"]
 
@@ -550,12 +538,10 @@ flowchart LR
     sections -->|"Lists"| KG
     archive -->|"Delegates to"| Librarian
     check -->|"Delegates to"| Librarian
-    council -->|"Runs"| CouncilAgent["CouncilAgent"]
 
     style CLI fill:#1e293b,color:#fff
     style Expert fill:#10b981,color:#fff
     style Librarian fill:#f59e0b,color:#000
-    style CouncilAgent fill:#ef4444,color:#fff
     style KG fill:#10b981,color:#fff
 ```
 
@@ -698,7 +684,6 @@ flowchart TB
 | **SQLite is a derived index** | Exists for fast search and edge queries when the graph grows large. Never the canonical record — always reconstructable from markdown. |
 | **Fork/rollback for Experts** | Each Q&A is a throwaway fork from the Expert's home state checkpoint. Home state never mutated — no context drift across queries. Think of it as `--resume` per query. |
 | **Chunk expert splitting** | Large sections auto-split at `token_threshold` with keyword-overlap routing to top-2 chunks. Expert pool keys: `section`, `section:0`, `section:1`, `section:__split__`. |
-| **CouncilAgent is internal** | 5-role deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) is a Librarian tool for reasoning about graph structure — not a top-level user-facing command. |
 | **Executor removed** | With CLI-first, the user's IDE agent is Agent 1. `ExecutorAgent` (and `akms chat`) are redundant. |
 | **No budget/token tracking** | Out of scope for the core system. Providers handle their own rate limits. |
 | **Lazy provider imports** | Only loads provider SDKs that are installed — avoids requiring all SDKs as hard dependencies. |

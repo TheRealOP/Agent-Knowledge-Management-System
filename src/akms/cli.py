@@ -336,45 +336,6 @@ def check(ctx: click.Context, as_json: bool) -> None:
 
 
 @main.command()
-@click.argument("task")
-@click.argument("context", default="")
-@click.option("--detailed", is_flag=True, help="Show all role perspectives, not just synthesis")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-@click.pass_context
-def council(ctx: click.Context, task: str, context: str, detailed: bool, as_json: bool) -> None:
-    """Run 5-role Council deliberation and return a recommendation."""
-    import json as _json
-
-    config = ctx.obj["config"]
-    registry = ctx.obj["registry"]
-
-    assignment = config.agent_assignments.get("council") or config.agent_assignments.get("expert") or config.agent_assignments.get("librarian")
-    if not assignment:
-        click.echo("Error: no council/expert/librarian assignment in agent_assignments", err=True)
-        raise SystemExit(1)
-
-    provider_cfg = config.providers.get(assignment.provider)
-    if not provider_cfg:
-        click.echo(f"Error: provider '{assignment.provider}' not configured", err=True)
-        raise SystemExit(1)
-
-    from akms.agents.council import CouncilAgent
-
-    provider = registry.create_from_config(assignment.provider, provider_cfg)
-    agent = CouncilAgent(provider=provider, model=assignment.model, config=config)
-
-    if detailed or as_json:
-        result = agent.convene_detailed(task, context)
-        if as_json:
-            click.echo(_json.dumps(result, indent=2))
-        else:
-            for role, text in result.items():
-                click.echo(f"\n## {role}\n{text}")
-    else:
-        click.echo(agent.convene(task, context))
-
-
-@main.command()
 @click.pass_context
 def research(ctx: click.Context) -> None:
     """Show the current research queue."""

@@ -28,28 +28,16 @@ providers:
       - claude-sonnet-4-6
 
 agent_assignments:
-  executor:
-    provider: claude
-    model: claude-sonnet-4-6
   expert:
     provider: claude
     model: claude-sonnet-4-6
   librarian:
     provider: claude
     model: claude-sonnet-4-6
-  council:
-    provider: claude
-    model: claude-sonnet-4-6
-
-budget:
-  daily_limit_usd: 5.00
-  track_tokens: true
-  token_log_path: "knowledge/logs/token_usage.json"
 
 knowledge:
   graph_dir: "knowledge/graph"
   archives_dir: "knowledge/archives"
-  user_overlay_dir: "knowledge/user_overlay"
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
   checkpoints_db_path: "knowledge/checkpoints.db"
@@ -60,22 +48,18 @@ Set your API key:
 export CLAUDE_API_KEY="sk-ant-..."
 ```
 
-## Step 3 — Init and chat
+## Step 3 — Init and query
 
 ```bash
-akms init    # creates the knowledge/ directory
-akms chat    # start talking
-```
-
-That's it. The knowledge graph is empty at first — start by ingesting some documents:
-
-```bash
-akms ingest my-notes.md
+akms init                          # creates the knowledge/ directory
+akms ingest my-notes.md            # feed documents to the Librarian
+akms search "consensus algorithms" # search the graph
+akms ask "distributed-systems" "How does Raft work?"
 ```
 
 ## What happens next
 
-After each chat session, run `akms ingest` on any new notes or documents. The Librarian agent will extract knowledge nodes and add them to the graph. Future chat sessions get smarter.
+Run `akms ingest` on documents or notes. The Librarian agent extracts knowledge nodes and adds them to the graph. Future queries get smarter as the graph grows.
 
 ## See also
 
