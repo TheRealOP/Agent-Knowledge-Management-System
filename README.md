@@ -81,7 +81,7 @@ Your IDE agent (Agent 1)
 
 1. **Agent 1** (your IDE agent) reads `agents.md` and calls `akms` commands as shell skills
 2. **Expert agents** pre-load knowledge sections into memory. Each query from Agent 1 creates a throwaway fork — answered and discarded. No context drift.
-3. **The Librarian** (Agent 3) reads documents and conversation logs, adds nodes to the graph, uses the Council internally to reason about graph structure
+3. **The Librarian** (Agent 3) reads documents and conversation logs, and adds nodes to the graph
 4. Every session leaves the graph richer for the next
 
 ---
@@ -277,7 +277,7 @@ This is the fork/rollback pattern — list concatenation is the fork, discarding
 
 ### Agent 3 — Librarian (knowledge curation)
 
-Runs when you call `akms ingest` or after sessions via `ingest_log()`. Reads documents, extracts structured knowledge, and adds nodes. Uses the Council internally to reason about graph structure before writing — the Council is not exposed as a top-level CLI command.
+Runs when you call `akms ingest` or after sessions via `ingest_log()`. Reads documents, extracts structured knowledge, and adds nodes.
 
 ---
 

@@ -107,7 +107,7 @@ graph LR
 | File | Class | Purpose |
 |---|---|---|
 | `base.py` | `BaseAgent` | Abstract base — `send()`, `ask()`, `reset()`, token tracking, JSONL logging, session management |
-| `expert.py` | `ExpertAgent` | Owns one knowledge section — `load_section()` builds system prompt from nodes, `answer()` uses fork/rollback (throwaway conversation branch) |
+| `expert.py` | `ExpertAgent` | Owns one knowledge section — `load_section()` builds system prompt from nodes, `answer()` uses stateless evaluation (appends to list instead of mutating) |
 | `librarian.py` | `LibrarianAgent` | Knowledge curator — `ingest_log()` extracts insights from JSONL, `digest_document()` chunks markdown by heading, `check_consistency()` finds broken wikilinks, `archive_node()` moves nodes to archives |
 
 ### `src/akms/core/`
@@ -603,7 +603,7 @@ flowchart TB
 
 ---
 
-## 18. Known Architectural Decisions
+## 16. Known Architectural Decisions
 
 | Decision | Rationale |
 |---|---|
