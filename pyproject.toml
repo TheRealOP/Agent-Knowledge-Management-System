@@ -1,7 +1,6 @@
-# edited by gemini
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.build_meta"  # edited by gemini
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "akms"
@@ -16,21 +15,18 @@ dependencies = [
     "click>=8.1",
     "anthropic>=0.30",
     "openai>=1.30",
-    "aiosqlite>=0.20",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.23",
-    "ruff>=0.4",
-]
+mcp = ["mcp>=1.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.4"]
 gemini = ["google-genai>=1.0"]
 deepseek = ["openai>=1.30"]
 ollama = ["ollama>=0.3"]
 
 [project.scripts]
 akms = "akms.cli:main"
+akms-mcp = "akms.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

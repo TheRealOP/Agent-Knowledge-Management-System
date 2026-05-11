@@ -1,4 +1,3 @@
-# edited by gemini
 """Configuration loading and validation for AKMS."""
 
 from __future__ import annotations
@@ -11,11 +10,8 @@ from typing import Any
 import yaml
 
 
-# edited by gemini — provider config dataclass
 @dataclass
 class ProviderConfig:
-    """Configuration for a single LLM provider."""
-
     name: str
     api_key: str | None = None
     base_url: str | None = None
@@ -23,19 +19,14 @@ class ProviderConfig:
     tmux_pane: str | None = None
 
 
-# edited by gemini — agent assignment dataclass
 @dataclass
 class AgentAssignment:
-    """Which provider/model an agent role should use."""
-
     provider: str
     model: str
 
 
 @dataclass
 class KnowledgeConfig:
-    """Paths for knowledge graph storage."""
-
     graph_dir: str = "knowledge/graph"
     archives_dir: str = "knowledge/archives"
     logs_dir: str = "knowledge/logs"
@@ -47,20 +38,15 @@ class ExpertConfig:
     token_threshold: int = 50000
 
 
-# edited by gemini — top-level config dataclass
 @dataclass
 class AKMSConfig:
-    """Top-level AKMS configuration."""
-
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
     agent_assignments: dict[str, AgentAssignment] = field(default_factory=dict)
     knowledge: KnowledgeConfig = field(default_factory=KnowledgeConfig)
     expert: ExpertConfig = field(default_factory=ExpertConfig)
 
 
-# edited by gemini — resolve env vars in strings
 def _resolve_env_vars(value: str) -> str:
-    """Replace ${ENV_VAR} patterns with actual environment values."""
     if not isinstance(value, str):
         return value
     if value.startswith("${") and value.endswith("}"):
@@ -69,9 +55,7 @@ def _resolve_env_vars(value: str) -> str:
     return value
 
 
-# edited by gemini — parse provider section
 def _parse_providers(raw: dict[str, Any]) -> dict[str, ProviderConfig]:
-    """Parse the providers section of the config."""
     providers = {}
     for name, data in raw.items():
         providers[name] = ProviderConfig(
@@ -84,9 +68,7 @@ def _parse_providers(raw: dict[str, Any]) -> dict[str, ProviderConfig]:
     return providers
 
 
-# edited by gemini — parse agent assignments section
 def _parse_assignments(raw: dict[str, Any]) -> dict[str, AgentAssignment]:
-    """Parse the agent_assignments section of the config."""
     assignments = {}
     for role, data in raw.items():
         assignments[role] = AgentAssignment(
@@ -96,12 +78,8 @@ def _parse_assignments(raw: dict[str, Any]) -> dict[str, AgentAssignment]:
     return assignments
 
 
-# edited by gemini — main config loader
 def load_config(path: str | Path | None = None) -> AKMSConfig:
-    """Load AKMS configuration from a YAML file.
-
-    Searches in order: explicit path, ./akms_config.yaml, ~/.akms/config.yaml.
-    """
+    """Load AKMS config. Searches: explicit path → ./akms_config.yaml → ~/.akms/config.yaml."""
     search_paths = [
         Path(path) if path else None,
         Path("akms_config.yaml"),
@@ -115,7 +93,7 @@ def load_config(path: str | Path | None = None) -> AKMSConfig:
             break
 
     if config_path is None:
-        return AKMSConfig()  # edited by gemini — return defaults if no config found
+        return AKMSConfig()
 
     with open(config_path) as f:
         raw = yaml.safe_load(f) or {}
