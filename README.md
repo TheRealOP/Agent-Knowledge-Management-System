@@ -181,18 +181,6 @@ akms check --json
 
 ---
 
-### `akms council <task> [context]`
-
-Run a 5-role Council deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) and return a recommendation.
-
-```bash
-akms council "Should we use eventual or strong consistency?" "10M users, rare writes"
-akms council "task" "context" --detailed   # show all 5 perspectives
-akms council "task" "context" --json
-```
-
----
-
 ### `akms status`
 
 Show configured providers and agent assignments.
@@ -437,25 +425,6 @@ for issue in librarian.check_consistency(graph):
 librarian.archive_node("distributed-systems", "old-explanation", "Incorrect claim", graph)
 ```
 
-### Use the Council (5-role deliberation)
-
-```python
-from akms.agents.council import CouncilAgent
-
-council = CouncilAgent(provider=provider, model="claude-sonnet-4-6", config=config)
-
-result = council.convene(
-    task="Should we use eventual or strong consistency for user profiles?",
-    context="10M users, rare writes, very frequent reads"
-)
-print(result)
-
-# All 5 perspectives (Advocate, Critic, Historian, Innovator, Synthesizer)
-detailed = council.convene_detailed(task="...", context="...")
-for role, perspective in detailed.items():
-    print(f"\n## {role}\n{perspective}")
-```
-
 ---
 
 ## Dynamic Expert Scaling
@@ -496,7 +465,6 @@ akms/
 │   │   ├── base.py              ← BaseAgent (send, ask, logging)
 │   │   ├── expert.py            ← Expert agent (fork/rollback, load_section)
 │   │   ├── librarian.py         ← Librarian agent (ingest, check, archive)
-│   │   └── council.py           ← 5-role deliberation (Librarian's internal tool)
 │   ├── core/
 │   │   ├── message.py           ← provider-agnostic message types
 │   │   └── orchestrator.py      ← expert pool, dynamic splitting, query routing
