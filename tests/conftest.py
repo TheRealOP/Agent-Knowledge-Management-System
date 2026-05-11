@@ -9,7 +9,7 @@ import pytest
 import tempfile
 import shutil
 from pathlib import Path
-from akms.config import KnowledgeConfig, AKMSConfig, BudgetConfig, ExpertConfig
+from akms.config import KnowledgeConfig, AKMSConfig, ExpertConfig
 from akms.core.message import Message, Response, Role
 
 
@@ -62,7 +62,6 @@ def knowledge_config(tmp_dir):
     return KnowledgeConfig(
         graph_dir=str(tmp_dir / "graph"),
         archives_dir=str(tmp_dir / "archives"),
-        user_overlay_dir=str(tmp_dir / "user_overlay"),
         logs_dir=str(tmp_dir / "logs"),
         db_path=str(tmp_dir / "akms.db"),
         checkpoints_db_path=str(tmp_dir / "cp.db"),
@@ -73,7 +72,6 @@ def knowledge_config(tmp_dir):
 def akms_config(knowledge_config):
     return AKMSConfig(
         knowledge=knowledge_config,
-        budget=BudgetConfig(),
         expert=ExpertConfig(token_threshold=50000),
     )
 

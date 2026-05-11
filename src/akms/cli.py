@@ -56,13 +56,6 @@ def status(ctx: click.Context) -> None:
     for role, assign in config.agent_assignments.items():
         click.echo(f"  {role}: {assign.provider}/{assign.model}")
 
-    click.echo()
-
-    # edited by gemini — show budget settings
-    click.echo("Budget:")
-    click.echo(f"  Daily limit: ${config.budget.daily_limit_usd:.2f}")
-    click.echo(f"  Per-query warn: ${config.budget.per_query_warn_usd:.2f}")
-    click.echo(f"  Token tracking: {config.budget.track_tokens}")
 
 
 # edited by gemini — init command to set up knowledge directory
@@ -76,7 +69,7 @@ def init(ctx: click.Context) -> None:
     kc = config.knowledge
 
     # edited by gemini — create directory structure
-    dirs = [kc.graph_dir, kc.archives_dir, kc.user_overlay_dir, kc.logs_dir]
+    dirs = [kc.graph_dir, kc.archives_dir, kc.logs_dir]
     for d in dirs:
         Path(d).mkdir(parents=True, exist_ok=True)
         click.echo(f"  Created: {d}/")
@@ -105,65 +98,6 @@ def init(ctx: click.Context) -> None:
     click.echo("\n✓ Knowledge graph initialized.")
 
 
-def _build_orchestrator(config: object, registry: object) -> object:
-    """Build a fully-initialized Orchestrator from config + registry."""
-    from akms.checkpoints.store import CheckpointStore
-    from akms.config import AKMSConfig
-    from akms.core.orchestrator import Orchestrator
-    from akms.knowledge.graph import HybridGraph
-    from akms.providers.registry import ProviderRegistry
-
-    cfg: AKMSConfig = config  # type: ignore[assignment]
-    reg: ProviderRegistry = registry  # type: ignore[assignment]
-
-    graph = HybridGraph(cfg.knowledge)
-    graph.init_graph_dirs()
-    store = CheckpointStore(cfg.knowledge.checkpoints_db_path)
-    store.init_db()
-    return Orchestrator(config=cfg, registry=reg, graph=graph, checkpoint_store=store)
-
-
-@main.command()
-@click.pass_context
-def chat(ctx: click.Context) -> None:
-    """Start an interactive chat session with the Executor agent."""
-    config = ctx.obj["config"]
-    registry = ctx.obj["registry"]
-
-    if not config.agent_assignments:
-        click.echo("Error: no agent_assignments configured in akms_config.yaml", err=True)
-        raise SystemExit(1)
-
-    orchestrator = _build_orchestrator(config, registry)
-    assignment = config.agent_assignments.get("executor")
-    if not assignment:
-        click.echo("Error: no 'executor' assignment in agent_assignments", err=True)
-        raise SystemExit(1)
-
-    from akms.agents.executor import ExecutorAgent
-    from akms.logging.conversation_log import ConversationLogger
-
-    provider_cfg = config.providers.get(assignment.provider)
-    if not provider_cfg:
-        click.echo(f"Error: provider '{assignment.provider}' not configured", err=True)
-        raise SystemExit(1)
-
-    provider = registry.create_from_config(assignment.provider, provider_cfg)
-    logger = ConversationLogger(config.knowledge.logs_dir)
-    executor = ExecutorAgent(provider=provider, model=assignment.model, config=config, logger=logger)
-
-    click.echo(f"AKMS Chat (executor/{assignment.model}) — type 'quit' to exit\n")
-    while True:
-        try:
-            user_input = click.prompt("You", prompt_suffix="> ")
-        except (click.Abort, EOFError):
-            click.echo("\nGoodbye.")
-            break
-        if user_input.strip().lower() in {"quit", "exit", "q"}:
-            click.echo("Goodbye.")
-            break
-        response = executor.run(user_input, orchestrator=orchestrator)
-        click.echo(f"\nAssistant: {response}\n")
 
 
 @main.command()
@@ -454,111 +388,6 @@ def research(ctx: click.Context) -> None:
     click.echo(queue_path.read_text())
 
 
-@main.command()
-@click.pass_context
-def budget(ctx: click.Context) -> None:
-    """Show today's token usage and cost."""
-    config = ctx.obj["config"]
-    log_path = config.budget.token_log_path
-
-    from akms.logging.token_tracker import TokenTracker
-
-    tracker = TokenTracker(log_path)
-    records = tracker.load_today()
-    if not records:
-        click.echo("No token usage recorded today.")
-        return
-
-    total_tokens = sum(r.get("tokens", 0) for r in records)
-    total_cost = sum(r.get("cost_usd", 0.0) for r in records)
-    click.echo(f"Today's usage: {total_tokens:,} tokens  ${total_cost:.4f}")
-    click.echo()
-    by_provider: dict[str, float] = {}
-    for r in records:
-        p = r.get("provider", "unknown")
-        by_provider[p] = by_provider.get(p, 0.0) + r.get("cost_usd", 0.0)
-    for provider, cost in sorted(by_provider.items()):
-        click.echo(f"  {provider}: ${cost:.4f}")
-
-    if total_cost >= config.budget.daily_limit_usd:
-        click.echo(f"\nWARNING: Daily limit (${config.budget.daily_limit_usd:.2f}) reached!")
-
-
-@main.group()
-@click.pass_context
-def overlay(ctx: click.Context) -> None:
-    """Manage user understanding overlays for knowledge concepts."""
-    pass
-
-
-@overlay.command(name="list")
-@click.pass_context
-def overlay_list(ctx: click.Context) -> None:
-    """List all tracked concepts and understanding scores."""
-    from akms.knowledge.user_overlay import UserOverlay
-
-    config = ctx.obj["config"]
-    uo = UserOverlay(config.knowledge.user_overlay_dir)
-    concepts = uo.list_concepts()
-    if not concepts:
-        click.echo("No concepts tracked yet.")
-        return
-    for cid, data in sorted(concepts.items()):
-        score = data.get("understanding", 0.0)
-        notes = data.get("notes", "")
-        reviewed = data.get("last_reviewed", "")
-        click.echo(f"  {cid}: {score:.2f}  (reviewed: {reviewed})  {notes}")
-
-
-@overlay.command(name="set")
-@click.argument("concept_id")
-@click.option("--score", type=float, required=True, help="Understanding score 0.0–1.0")
-@click.option("--notes", default="", help="Optional notes about this concept")
-@click.pass_context
-def overlay_set(ctx: click.Context, concept_id: str, score: float, notes: str) -> None:
-    """Set understanding score for a concept."""
-    from akms.knowledge.user_overlay import UserOverlay
-
-    config = ctx.obj["config"]
-    uo = UserOverlay(config.knowledge.user_overlay_dir)
-    uo.set_concept(concept_id, score, notes)
-    clamped = max(0.0, min(1.0, score))
-    click.echo(f"Set '{concept_id}' understanding to {clamped:.2f}")
-
-
-@overlay.command(name="get")
-@click.argument("concept_id")
-@click.pass_context
-def overlay_get(ctx: click.Context, concept_id: str) -> None:
-    """Get understanding score for a concept."""
-    from akms.knowledge.user_overlay import UserOverlay
-
-    config = ctx.obj["config"]
-    uo = UserOverlay(config.knowledge.user_overlay_dir)
-    data = uo.get_concept(concept_id)
-    if data is None:
-        click.echo(f"Concept '{concept_id}' not found.")
-        return
-    score = data.get("understanding", 0.0)
-    notes = data.get("notes", "")
-    reviewed = data.get("last_reviewed", "")
-    click.echo(f"{concept_id}: {score:.2f}  (reviewed: {reviewed})  {notes}")
-
-
-@overlay.command(name="remove")
-@click.argument("concept_id")
-@click.pass_context
-def overlay_remove(ctx: click.Context, concept_id: str) -> None:
-    """Remove a concept from the overlay."""
-    from akms.knowledge.user_overlay import UserOverlay
-
-    config = ctx.obj["config"]
-    uo = UserOverlay(config.knowledge.user_overlay_dir)
-    removed = uo.remove_concept(concept_id)
-    if removed:
-        click.echo(f"Removed '{concept_id}'.")
-    else:
-        click.echo(f"Concept '{concept_id}' not found.")
 
 
 if __name__ == "__main__":

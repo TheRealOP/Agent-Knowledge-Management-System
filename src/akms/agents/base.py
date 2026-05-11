@@ -9,7 +9,6 @@ from akms.core.message import Message, Response, Role
 if TYPE_CHECKING:
     from akms.config import AKMSConfig
     from akms.logging.conversation_log import ConversationLogger
-    from akms.logging.token_tracker import TokenTracker
     from akms.providers.base import LLMProvider
 
 
@@ -25,14 +24,12 @@ class BaseAgent(ABC):
         config: AKMSConfig,
         logger: ConversationLogger | None = None,
         session_id: str | None = None,
-        token_tracker: TokenTracker | None = None,
     ) -> None:
         self._provider = provider
         self._model = model
         self._config = config
         self._logger = logger
         self._session_id = session_id or uuid.uuid4().hex
-        self._token_tracker = token_tracker
         self._history: list[Message] = []
 
     @property
@@ -53,10 +50,6 @@ class BaseAgent(ABC):
         self._history.append(response.message)
         if self._logger:
             self._logger.log_message(self.agent_type, self._session_id, response.message)
-        if self._token_tracker:
-            self._token_tracker.log(
-                response.provider, response.model, response.tokens_used, response.cost_usd
-            )
         return response
 
     def ask(self, prompt: str, system: str | None = None, **kwargs: Any) -> Response:

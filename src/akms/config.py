@@ -31,25 +31,12 @@ class AgentAssignment:
     model: str
 
 
-# edited by gemini — budget config dataclass
-@dataclass
-class BudgetConfig:
-    """Token and cost budget settings."""
-
-    daily_limit_usd: float = 5.0
-    per_query_warn_usd: float = 0.50
-    track_tokens: bool = True
-    token_log_path: str = "knowledge/logs/token_usage.json"
-
-
-# edited by gemini — knowledge paths dataclass
 @dataclass
 class KnowledgeConfig:
     """Paths for knowledge graph storage."""
 
     graph_dir: str = "knowledge/graph"
     archives_dir: str = "knowledge/archives"
-    user_overlay_dir: str = "knowledge/user_overlay"
     logs_dir: str = "knowledge/logs"
     db_path: str = "knowledge/akms.db"
     checkpoints_db_path: str = "knowledge/checkpoints.db"
@@ -67,7 +54,6 @@ class AKMSConfig:
 
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
     agent_assignments: dict[str, AgentAssignment] = field(default_factory=dict)
-    budget: BudgetConfig = field(default_factory=BudgetConfig)
     knowledge: KnowledgeConfig = field(default_factory=KnowledgeConfig)
     expert: ExpertConfig = field(default_factory=ExpertConfig)
 
@@ -136,7 +122,6 @@ def load_config(path: str | Path | None = None) -> AKMSConfig:
     return AKMSConfig(
         providers=_parse_providers(raw.get("providers", {})),
         agent_assignments=_parse_assignments(raw.get("agent_assignments", {})),
-        budget=BudgetConfig(**raw.get("budget", {})),
         knowledge=KnowledgeConfig(**raw.get("knowledge", {})),
         expert=ExpertConfig(**raw.get("expert", {})),
     )
