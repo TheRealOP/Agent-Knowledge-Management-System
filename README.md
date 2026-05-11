@@ -1,4 +1,6 @@
-# Agent Knowledge Management System (AKMS)
+# Agent Knowledge Management System (AKMS) 
+
+v0.1.0
 
 A Python library that gives AI agents **persistent memory**. Knowledge is stored in a graph that grows across sessions. Any agent that can run a shell command can query it — no wrappers, no per-IDE integration code.
 
