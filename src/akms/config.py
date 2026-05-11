@@ -20,6 +20,7 @@ class ProviderConfig:
     api_key: str | None = None
     base_url: str | None = None
     models: list[str] = field(default_factory=list)
+    tmux_pane: str | None = None
 
 
 # edited by gemini — agent assignment dataclass
@@ -78,6 +79,7 @@ def _parse_providers(raw: dict[str, Any]) -> dict[str, ProviderConfig]:
             api_key=_resolve_env_vars(data.get("api_key", "")) or None,
             base_url=data.get("base_url"),
             models=data.get("models", []),
+            tmux_pane=data.get("tmux_pane"),
         )
     return providers
 

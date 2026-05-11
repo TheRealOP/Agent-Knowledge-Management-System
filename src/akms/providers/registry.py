@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from akms.config import AKMSConfig, ProviderConfig
+from akms.config import ProviderConfig
 from akms.providers.base import LLMProvider
 
 
@@ -49,6 +49,8 @@ class ProviderRegistry:
         if provider_config.base_url:
             kwargs["base_url"] = provider_config.base_url
         kwargs["models"] = provider_config.models
+        if provider_config.tmux_pane:
+            kwargs["tmux_pane"] = provider_config.tmux_pane
         return self.create(name, **kwargs)
 
     # edited by gemini — list registered providers
@@ -90,6 +92,24 @@ def build_default_registry() -> ProviderRegistry:
     try:
         from akms.providers.ollama import OllamaProvider
         registry.register("ollama", OllamaProvider)
+    except ImportError:
+        pass
+
+    # CLI providers — no API key needed; auth is handled by the CLI binary itself
+    try:
+        from akms.providers.cli_subprocess import CLISubprocessProvider
+        registry.register(
+            "claude_cli",
+            lambda **kw: CLISubprocessProvider(cli_binary="claude", print_flag="-p", **kw),
+        )
+        registry.register(
+            "codex_cli",
+            lambda **kw: CLISubprocessProvider(cli_binary="codex", print_flag="exec", model_flag=None, **kw),
+        )
+        registry.register(
+            "gemini_cli",
+            lambda **kw: CLISubprocessProvider(cli_binary="gemini", print_flag="-p", **kw),
+        )
     except ImportError:
         pass
 

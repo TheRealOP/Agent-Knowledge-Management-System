@@ -24,6 +24,27 @@ providers:
       - llama3
       - mistral
 
+  # --- Subscription-based CLI providers (no API key needed) ---
+  # These use your existing claude / codex / gemini CLI authentication.
+  # To watch an agent live: tail -f ~/.akms/panes/<tmux_pane>.log
+  # in a terminal or tmux pane.
+  #
+  # claude_cli:
+  #   models:
+  #     - claude-opus-4-6
+  #     - claude-sonnet-4-6
+  #   tmux_pane: akms-expert      # optional — names the log file
+  #
+  # codex_cli:
+  #   models:
+  #     - gpt-5-codex
+  #   tmux_pane: akms-librarian
+  #
+  # gemini_cli:
+  #   models:
+  #     - gemini-2.5-pro
+  #   tmux_pane: akms-gemini
+
 agent_assignments:
   expert:
     provider: claude
@@ -31,6 +52,15 @@ agent_assignments:
   librarian:
     provider: claude
     model: claude-sonnet-4-6
+
+  # Example: mix providers per agent (no API keys needed for *_cli variants)
+  #
+  # expert:
+  #   provider: claude_cli
+  #   model: claude-opus-4-6
+  # librarian:
+  #   provider: codex_cli
+  #   model: gpt-5-codex
 
 knowledge:
   graph_dir: "knowledge/graph"
