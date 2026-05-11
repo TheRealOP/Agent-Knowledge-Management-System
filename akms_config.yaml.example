@@ -1,4 +1,3 @@
-# edited by gemini
 # AKMS Configuration Example
 # Copy to akms_config.yaml and fill in your API keys.
 
@@ -6,13 +5,11 @@ providers:
   claude:
     api_key: "${CLAUDE_API_KEY}"
     models:
-      - claude-sonnet-4
-      - claude-opus-4
+      - claude-sonnet-4-6
   openai:
     api_key: "${OPENAI_API_KEY}"
     models:
       - gpt-4o
-      - o3
   gemini:
     api_key: "${GEMINI_API_KEY}"
     models:
@@ -28,32 +25,18 @@ providers:
       - mistral
 
 agent_assignments:
-  executor:
-    provider: claude
-    model: claude-sonnet-4
   expert:
-    provider: openai
-    model: gpt-4o
+    provider: claude
+    model: claude-sonnet-4-6
   librarian:
     provider: claude
-    model: claude-sonnet-4
-  council:
-    provider: openai
-    model: gpt-4o
-
-budget:
-  daily_limit_usd: 5.00
-  per_query_warn_usd: 0.50
-  track_tokens: true
-  token_log_path: "knowledge/logs/token_usage.json"
+    model: claude-sonnet-4-6
 
 knowledge:
   graph_dir: "knowledge/graph"
   archives_dir: "knowledge/archives"
-  user_overlay_dir: "knowledge/user_overlay"
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
-  checkpoints_db_path: "knowledge/checkpoints.db"
 
 expert:
   token_threshold: 50000  # tokens per Expert; sections larger than this are split

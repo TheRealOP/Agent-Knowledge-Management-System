@@ -18,7 +18,7 @@ Knowledge is stored as markdown nodes in a graph. Expert agents pre-load section
 
 1. **Stores knowledge** — markdown files + SQLite index, human-readable, git-friendly
 2. **Retrieves knowledge** — Expert agents pre-load sections and answer queries via `akms ask`
-3. **Grows knowledge** — the Librarian agent reads documents and conversation logs, adds new nodes, uses the Council internally to reason about graph structure
+3. **Grows knowledge** — the Librarian agent reads documents and conversation logs, and adds new nodes
 
 ## The three roles
 
@@ -26,11 +26,11 @@ Knowledge is stored as markdown nodes in a graph. Expert agents pre-load section
 |---|---|---|
 | **Agent 1 (Main)** | Your IDE agent (Claude Code, Codex, ...) | Talks to you, does work, queries Experts via `akms` CLI commands |
 | **Agent 2 (Expert)** | `ExpertAgent` — one per section | Pre-loads a knowledge section, answers queries via fork/rollback (no context drift) |
-| **Agent 3 (Manager)** | `LibrarianAgent` | Ingests documents, manages the expert pool, uses Council internally to organize the graph |
+| **Agent 3 (Manager)** | `LibrarianAgent` | Ingests documents and manages the expert pool |
 
 ## The fork/rollback pattern
 
-Each Expert pre-loads its section into a home state checkpoint (think `--resume`). Every query from Agent 1 creates a throwaway fork, gets answered, and is discarded. The Expert's home state is never mutated — no context drift across queries.
+Each Expert pre-loads its section into a home state (a Python list of messages). Every query from Agent 1 builds a new message list (`home_msgs + [question]`), gets answered, and is discarded. The Expert's home state is never mutated — no context drift across queries.
 
 ## Why not just use a plain chatbot?
 

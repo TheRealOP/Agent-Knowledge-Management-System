@@ -40,7 +40,6 @@ knowledge:
   archives_dir: "knowledge/archives"
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
-  checkpoints_db_path: "knowledge/checkpoints.db"
 ```
 
 Set your API key:

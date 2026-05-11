@@ -1,34 +1,27 @@
 from __future__ import annotations
 
-import uuid
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from akms.agents.expert import ExpertAgent
-    from akms.checkpoints.store import CheckpointStore
     from akms.config import AKMSConfig
     from akms.knowledge.graph import HybridGraph
     from akms.providers.registry import ProviderRegistry
 
 
 class Orchestrator:
-    """Coordinates agents, experts, and knowledge graph for a session."""
+    """Expert pool — caches loaded experts, handles token-threshold chunk splitting."""
 
     def __init__(
         self,
         config: AKMSConfig,
         registry: ProviderRegistry,
         graph: HybridGraph,
-        checkpoint_store: CheckpointStore,
     ) -> None:
         self._config = config
         self._registry = registry
         self._graph = graph
-        self._store = checkpoint_store
         self._expert_pool: dict[str, Any] = {}
-
-    def start_session(self) -> str:
-        return uuid.uuid4().hex
 
     def _build_provider(self, role: str) -> tuple[Any, str]:
         """Return (provider_instance, model_name) for the given agent role."""
@@ -58,10 +51,8 @@ class Orchestrator:
 
         provider, model = self._build_provider("expert")
         node_ids = self._graph.list_nodes(section)
-
         threshold = self._config.expert.token_threshold
 
-        # Build full knowledge block to estimate tokens
         knowledge_parts: list[str] = []
         for node_id in node_ids:
             node = self._graph.get_node(section, node_id)
@@ -78,14 +69,8 @@ class Orchestrator:
         estimated_tokens = provider.count_tokens(probe_messages)
 
         if estimated_tokens <= threshold or len(node_ids) == 0:
-            expert = ExpertAgent(
-                section=section,
-                provider=provider,
-                model=model,
-                config=self._config,
-            )
+            expert = ExpertAgent(section=section, provider=provider, model=model, config=self._config)
             expert.load_section(self._graph)
-            expert.set_home_state(self._store)
             self._expert_pool[section] = expert
             return expert
 
@@ -119,14 +104,8 @@ class Orchestrator:
         chunk_keys: list[str] = []
         for i, chunk_node_ids in enumerate(chunks):
             chunk_key = f"{section}:{i}"
-            chunk_expert = ExpertAgent(
-                section=section,
-                provider=provider,
-                model=model,
-                config=self._config,
-            )
+            chunk_expert = ExpertAgent(section=section, provider=provider, model=model, config=self._config)
             chunk_expert.load_nodes(self._graph, chunk_node_ids)
-            chunk_expert.set_home_state(self._store)
             self._expert_pool[chunk_key] = chunk_expert
             chunk_keys.append(chunk_key)
 
@@ -142,17 +121,12 @@ class Orchestrator:
         split_key = f"{section}:__split__"
         if split_key not in self._expert_pool:
             expert = self.get_expert(section)
-            return expert.answer(question, store=self._store)
+            return expert.answer(question)
 
         chunk_keys: list[str] = self._expert_pool[split_key]
         if len(chunk_keys) <= 2:
-            answers = [
-                self._expert_pool[k].answer(question, store=self._store)
-                for k in chunk_keys
-            ]
-            return "\n\n".join(answers)
+            return "\n\n".join(self._expert_pool[k].answer(question) for k in chunk_keys)
 
-        # Score chunks by keyword overlap
         question_tokens = set(question.lower().split())
 
         def _score(chunk_key: str) -> int:
@@ -162,20 +136,8 @@ class Orchestrator:
             keywords = {k.lower() for k in node_ids | tags}
             return len(question_tokens & keywords)
 
-        ranked = sorted(chunk_keys, key=_score, reverse=True)
-        top_two = ranked[:2]
-        answers = [
-            self._expert_pool[k].answer(question, store=self._store)
-            for k in top_two
-        ]
-        return "\n\n".join(answers)
-
-    def list_sections(self) -> list[str]:
-        return self._graph.list_sections()
-
-    def search_knowledge(self, query: str, top_k: int = 5) -> list[dict]:
-        results = self._graph.search(query, top_k=top_k)
-        return [node for node, _score in results]
+        top_two = sorted(chunk_keys, key=_score, reverse=True)[:2]
+        return "\n\n".join(self._expert_pool[k].answer(question) for k in top_two)
 
     def flush_expert_pool(self) -> None:
         """Clear cached experts (call after graph updates)."""
@@ -183,16 +145,12 @@ class Orchestrator:
 
     def spawn_expert(self, section: str) -> ExpertAgent:
         """Force-create a fresh Expert for section, evicting any cached instance."""
-        keys_to_remove = [
-            k for k in self._expert_pool
-            if k == section or k.startswith(f"{section}:")
-        ]
-        for k in keys_to_remove:
+        for k in [k for k in self._expert_pool if k == section or k.startswith(f"{section}:")]:
             del self._expert_pool[k]
         return self.get_expert(section)
 
     def refresh_expert(self, section: str) -> ExpertAgent | None:
-        """Reload an existing Expert's section after graph changes."""
+        """Reload an existing Expert's section after graph changes. Returns None if not cached."""
         if section not in self._expert_pool and f"{section}:__split__" not in self._expert_pool:
             return None
         return self.spawn_expert(section)

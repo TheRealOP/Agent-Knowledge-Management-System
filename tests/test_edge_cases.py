@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from akms.agents.librarian import LibrarianAgent
-from akms.checkpoints.store import CheckpointStore
 from akms.config import AgentAssignment, ExpertConfig, ProviderConfig
 from akms.core.orchestrator import Orchestrator
 from akms.knowledge.graph import HybridGraph
@@ -23,18 +22,11 @@ def _make_orchestrator(akms_config, knowledge_config, provider=None, token_thres
     graph = HybridGraph(knowledge_config)
     graph.init_graph_dirs()
 
-    store = CheckpointStore(akms_config.knowledge.checkpoints_db_path)
-    store.init_db()
-
-    return (
-        Orchestrator(config=akms_config, registry=registry, graph=graph, checkpoint_store=store),
-        graph,
-        store,
-    )
+    return Orchestrator(config=akms_config, registry=registry, graph=graph), graph
 
 
 def test_large_graph_many_sections(akms_config, knowledge_config):
-    orc, graph, _ = _make_orchestrator(akms_config, knowledge_config)
+    orc, graph = _make_orchestrator(akms_config, knowledge_config)
 
     for s in range(20):
         section = f"section_{s}"
@@ -52,17 +44,13 @@ def test_large_graph_many_sections(akms_config, knowledge_config):
 
 
 def test_empty_section_query(akms_config, knowledge_config):
-    orc, graph, _ = _make_orchestrator(akms_config, knowledge_config)
+    orc, graph = _make_orchestrator(akms_config, knowledge_config)
     provider = MockProvider(["No knowledge found."])
     registry = ProviderRegistry()
     registry.register("mock", lambda **kwargs: provider)
     akms_config.providers["mock"] = ProviderConfig(name="mock")
     akms_config.agent_assignments["expert"] = AgentAssignment(provider="mock", model="mock-model")
-    store = CheckpointStore(akms_config.knowledge.checkpoints_db_path)
-    store.init_db()
-    orc2 = Orchestrator(
-        config=akms_config, registry=registry, graph=graph, checkpoint_store=store
-    )
+    orc2 = Orchestrator(config=akms_config, registry=registry, graph=graph)
     answer = orc2.query_expert("empty_section", "What do you know?")
     assert isinstance(answer, str)
 

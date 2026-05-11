@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from akms.agents.expert import ExpertAgent
-from akms.checkpoints.store import CheckpointStore
 from akms.knowledge.graph import HybridGraph
 from akms.logging.conversation_log import ConversationLogger
 from conftest import MockProvider
@@ -38,22 +37,6 @@ def test_answer_without_store(akms_config, knowledge_config):
     assert "Gravity" in answer or "down" in answer
     assert expert._history == []
 
-
-def test_answer_with_store_uses_fork(akms_config, knowledge_config, tmp_path):
-    graph = _make_graph(knowledge_config)
-    graph.add_node("physics", "gravity", "Gravity", "Objects fall down.")
-
-    store = CheckpointStore(str(tmp_path / "cp.db"))
-    store.init_db()
-
-    provider = MockProvider(["Gravity pull things down."])
-    expert = ExpertAgent(section="physics", provider=provider, model="mock-model", config=akms_config)
-    expert.load_section(graph)
-    expert.set_home_state(store)
-
-    answer = expert.answer("What is gravity?", store=store)
-    assert isinstance(answer, str)
-    assert expert._history == []
 
 
 def test_load_nodes_subset(akms_config, knowledge_config):

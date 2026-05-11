@@ -39,7 +39,6 @@ class KnowledgeConfig:
     archives_dir: str = "knowledge/archives"
     logs_dir: str = "knowledge/logs"
     db_path: str = "knowledge/akms.db"
-    checkpoints_db_path: str = "knowledge/checkpoints.db"
 
 
 @dataclass

@@ -72,7 +72,6 @@ graph LR
     SrcDir --> Agents["📁 agents/"]
     SrcDir --> Core["📁 core/"]
     SrcDir --> Knowledge["📁 knowledge/"]
-    SrcDir --> Checkpoints["📁 checkpoints/"]
     SrcDir --> ProvidersDir["📁 providers/"]
 
     SrcDir --> Logging["📁 logging/"]
@@ -128,14 +127,6 @@ graph LR
 | `search.py` | `GraphSearch` | Tokenized keyword search — splits query into tokens, scores nodes by token-hit count, returns ranked results |
 | `schema.sql` | — | SQLite DDL for `nodes`, `edges`, `provenance`, `search_index` |
 
-### `src/akms/checkpoints/`
-
-| File | Class/Function | Purpose |
-|---|---|---|
-| `store.py` | `CheckpointStore` | SQLite-backed checkpoint persistence — `save()`, `load()`, `get_home_state_id()`, `list_checkpoints()` |
-| `fork.py` | `fork_from_checkpoint()`, `discard_fork()`, `restore_home_state()` | Fork/rollback helpers — create throwaway conversation branches from checkpoints, discard after use |
-| `schema.sql` | — | SQLite DDL for `checkpoints` and `forks` tables |
-
 ### `src/akms/providers/`
 
 | File | Class | Purpose |
@@ -176,7 +167,6 @@ Wrapper classes (`GenericWrapper`, `ClaudeCodeWrapper`, `CodexWrapper`, `OpenCod
 | `test_db.py` | SQLite layer CRUD, search index, edges |
 | `test_wiki.py` | Wiki layer file I/O, frontmatter parsing, wikilinks |
 | `test_message.py` | Message/Response serialization, Conversation forking |
-| `test_checkpoints.py` | Checkpoint save/load, home state, forks |
 | `test_expert.py` | Expert section loading, fork-based answering |
 | `test_librarian.py` | Log ingestion, document digestion, consistency checks, archival |
 | `test_orchestrator.py` | Expert pool caching, dynamic splitting, query routing |
@@ -199,25 +189,21 @@ sequenceDiagram
     participant X as Expert
     participant P as LLM Provider
     participant KG as Knowledge Graph
-    participant CP as Checkpoint Store
 
     A1->>CLI: akms ask distributed-systems "What is CAP theorem?"
     CLI->>O: query_expert("distributed-systems", "CAP?")
     O->>O: check expert pool cache
     O->>X: create ExpertAgent (if not cached)
-    X->>KG: load_section() → read all nodes
-    X->>CP: set_home_state() → persist home checkpoint
+    X->>KG: load_section() → read all nodes into _home_messages
     O->>X: answer(question)
-    X->>CP: fork_from_checkpoint()
-    X->>P: chat(fork messages)
+    X->>P: chat(home_msgs + [question])
     P-->>X: expert answer
-    X->>CP: discard_fork()
     X-->>O: compressed answer
     O-->>CLI: answer text
     CLI-->>A1: stdout
 ```
 
-The Expert's home state (system prompt + section nodes) is **persisted as a checkpoint**. Each question from Agent 1 creates a throwaway fork — answered and discarded. When Agent 1 is done, the Expert rolls back cleanly to its home state, ready for the next query with no context drift.
+The Expert's home state lives in memory as `_home_messages`. Each question builds `_home_messages + [question]` — a new list that is never stored back. Home state is never mutated — no context drift across queries.
 
 ---
 
@@ -399,18 +385,15 @@ flowchart LR
 
 ```mermaid
 stateDiagram-v2
-    [*] --> HomeState: load_section() + set_home_state()
-    HomeState --> Fork: question arrives → fork_from_checkpoint()
-    Fork --> Answer: provider.chat(fork_messages)
-    Answer --> Discard: discard_fork()
-    Discard --> HomeState: home state unchanged
+    [*] --> HomeState: load_section() builds _home_messages list
+    HomeState --> Answer: home_msgs + [question] → provider.chat()
+    Answer --> HomeState: home state unchanged (list + never mutates original)
 
-    note right of HomeState: System prompt + all section nodes
-    note right of Fork: Throwaway branch — never mutates history
-    note right of Discard: Fork marked 'discarded' in SQLite
+    note right of HomeState: Python list — system prompt + all section nodes
+    note right of Answer: Throwaway list — _home_messages never reassigned
 ```
 
-**Why?** Each Expert Q&A is a throwaway branch. The Expert's home state stays clean — no accumulated context drift across queries.
+**Why?** Each Expert Q&A builds a new message list via `_home_messages + [question]`. Python list `+` creates a new list; `_home_messages` is never modified. No accumulated context drift across queries.
 
 ---
 
@@ -573,60 +556,7 @@ flowchart LR
 
 ---
 
-## 15. Checkpoint & Fork Database
-
-```mermaid
-erDiagram
-    checkpoints {
-        INTEGER id PK
-        TEXT agent_type
-        TEXT agent_id
-        TEXT name
-        TEXT messages_json
-        TEXT created_at
-        INTEGER is_home_state
-    }
-    forks {
-        INTEGER id PK
-        INTEGER checkpoint_id FK
-        TEXT fork_messages_json
-        TEXT created_at
-        TEXT status
-    }
-
-    checkpoints ||--o{ forks : "checkpoint_id"
-```
-
-- **Home state checkpoints** (`is_home_state=1`): Expert's system prompt + loaded section knowledge
-- **Forks**: Throwaway Q&A branches — created from checkpoints, discarded after answering
-
----
-
-## 16. Council Deliberation Flow
-
-```mermaid
-flowchart TD
-    Task["Task + Context"]
-    Task --> A["🟢 Advocate: Argue FOR"]
-    Task --> C["🔴 Critic: Find flaws"]
-    Task --> H["🟡 Historian: Past evidence"]
-    Task --> I["🔵 Innovator: Alternatives"]
-
-    A & C & H & I --> S["🟣 Synthesizer: Merge all views"]
-    S --> Result["Final Recommendation"]
-
-    style A fill:#22c55e,color:#fff
-    style C fill:#ef4444,color:#fff
-    style H fill:#eab308,color:#000
-    style I fill:#3b82f6,color:#fff
-    style S fill:#a855f7,color:#fff
-```
-
-Each role is a separate LLM call with a role-specific system prompt. The Synthesizer sees all four perspectives and produces the final recommendation.
-
----
-
-## 17. Data Flow Summary
+## 15. Data Flow Summary
 
 ```mermaid
 flowchart TB
@@ -644,7 +574,6 @@ flowchart TB
     subgraph Storage
         Wiki["📁 Markdown\n(source of truth)"]
         DB["🗄️ SQLite\n(derived index)"]
-        CP["💾 checkpoints.db\n(expert home states)"]
     end
 
     subgraph Query["Query (reads from graph)"]
@@ -661,7 +590,6 @@ flowchart TB
     Manual --> Sync --> DB
     Logs -->|"ingest_log()"| Lib
     Wiki & DB -->|"load_section()"| Exp
-    Exp -->|"home state"| CP
     Ask --> Exp
     Search --> DB
     Get --> Wiki
@@ -682,7 +610,7 @@ flowchart TB
 | **CLI is the universal interface** | Any agent (Claude Code, Codex, Ollama, ...) reads `agents.md` and calls `akms` shell commands as skills. No per-IDE wrapper code. |
 | **Markdown is source of truth** | LLMs traverse and connect ideas naturally in markdown. Git-friendly, human-readable, wikilink syntax maps directly to graph edges. |
 | **SQLite is a derived index** | Exists for fast search and edge queries when the graph grows large. Never the canonical record — always reconstructable from markdown. |
-| **Fork/rollback for Experts** | Each Q&A is a throwaway fork from the Expert's home state checkpoint. Home state never mutated — no context drift across queries. Think of it as `--resume` per query. |
+| **Fork/rollback for Experts** | Each Q&A builds `_home_messages + [question]` — a new Python list. `_home_messages` is never modified. No context drift across queries. |
 | **Chunk expert splitting** | Large sections auto-split at `token_threshold` with keyword-overlap routing to top-2 chunks. Expert pool keys: `section`, `section:0`, `section:1`, `section:__split__`. |
 | **Executor removed** | With CLI-first, the user's IDE agent is Agent 1. `ExecutorAgent` (and `akms chat`) are redundant. |
 | **No budget/token tracking** | Out of scope for the core system. Providers handle their own rate limits. |

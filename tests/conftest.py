@@ -64,7 +64,6 @@ def knowledge_config(tmp_dir):
         archives_dir=str(tmp_dir / "archives"),
         logs_dir=str(tmp_dir / "logs"),
         db_path=str(tmp_dir / "akms.db"),
-        checkpoints_db_path=str(tmp_dir / "cp.db"),
     )
 
 

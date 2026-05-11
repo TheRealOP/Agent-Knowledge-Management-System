@@ -104,7 +104,6 @@ def test_spawn_expert_delegates(akms_config, knowledge_config):
     graph = _make_graph(knowledge_config)
     graph.add_node("science", "atoms", "Atoms", "Basic matter.")
 
-    from akms.checkpoints.store import CheckpointStore
     from akms.core.orchestrator import Orchestrator
     from akms.providers.registry import ProviderRegistry
 
@@ -116,11 +115,7 @@ def test_spawn_expert_delegates(akms_config, knowledge_config):
     akms_config.providers["mock"] = ProviderConfig(name="mock")
     akms_config.agent_assignments["expert"] = AgentAssignment(provider="mock", model="mock-model")
 
-    store = CheckpointStore(akms_config.knowledge.checkpoints_db_path)
-    store.init_db()
-    orchestrator = Orchestrator(
-        config=akms_config, registry=registry, graph=graph, checkpoint_store=store
-    )
+    orchestrator = Orchestrator(config=akms_config, registry=registry, graph=graph)
 
     librarian = LibrarianAgent(provider=provider, model="mock-model", config=akms_config)
     expert = librarian.spawn_expert("science", orchestrator)
@@ -132,7 +127,6 @@ def test_refresh_expert_delegates(akms_config, knowledge_config):
     graph = _make_graph(knowledge_config)
     graph.add_node("science", "atoms", "Atoms", "Basic matter.")
 
-    from akms.checkpoints.store import CheckpointStore
     from akms.core.orchestrator import Orchestrator
     from akms.providers.registry import ProviderRegistry
     from akms.config import AgentAssignment, ProviderConfig
@@ -143,11 +137,7 @@ def test_refresh_expert_delegates(akms_config, knowledge_config):
     akms_config.providers["mock"] = ProviderConfig(name="mock")
     akms_config.agent_assignments["expert"] = AgentAssignment(provider="mock", model="mock-model")
 
-    store = CheckpointStore(akms_config.knowledge.checkpoints_db_path)
-    store.init_db()
-    orchestrator = Orchestrator(
-        config=akms_config, registry=registry, graph=graph, checkpoint_store=store
-    )
+    orchestrator = Orchestrator(config=akms_config, registry=registry, graph=graph)
 
     librarian = LibrarianAgent(provider=provider, model="mock-model", config=akms_config)
     result = librarian.refresh_expert("science", orchestrator)

@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from akms.agents.librarian import LibrarianAgent
-from akms.checkpoints.store import CheckpointStore
 from akms.config import AgentAssignment, ExpertConfig, ProviderConfig
 from akms.core.orchestrator import Orchestrator
 from akms.knowledge.graph import HybridGraph
@@ -45,11 +44,7 @@ def test_librarian_digest_then_expert_query(akms_config, knowledge_config, tmp_p
     akms_config.agent_assignments["expert"] = AgentAssignment(provider="mock", model="mock-model")
     akms_config.expert = ExpertConfig(token_threshold=50000)
 
-    store = CheckpointStore(akms_config.knowledge.checkpoints_db_path)
-    store.init_db()
-    orc = Orchestrator(
-        config=akms_config, registry=registry, graph=graph, checkpoint_store=store
-    )
+    orc = Orchestrator(config=akms_config, registry=registry, graph=graph)
 
     answer = orc.query_expert("biology", "What are cells?")
     assert isinstance(answer, str)

@@ -34,7 +34,6 @@ knowledge:
   archives_dir: "knowledge/archives"
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
-  checkpoints_db_path: "knowledge/checkpoints.db"
 ```
 
 ```bash
@@ -264,17 +263,17 @@ Your Claude Code session, Codex, or any agent that can run shell commands. It re
 
 ### Agent 2 — Expert (knowledge retrieval)
 
-One Expert per knowledge section. Experts pre-load their section into a home state checkpoint. Each query from Agent 1 creates a throwaway conversation fork — answered and discarded. The home state is never mutated.
+One Expert per knowledge section. Experts pre-load their section into a home state (a Python list of messages). Each query builds `home_messages + [question]` — a new list — and discards it after answering. The home state is never mutated.
 
 ```
-Expert home state:  [system prompt + all section nodes]  ← checkpoint
+Expert home state:  [system prompt + all section nodes]  (Python list)
                               │
-         query arrives ──► fork ──► answer ──► discard fork
+         query arrives ──► home_msgs + [question] ──► answer ──► discard
                               │
                     home state unchanged
 ```
 
-This is the fork/rollback pattern — think of the home state as a `--resume` point. No context drift across queries.
+This is the fork/rollback pattern — list concatenation is the fork, discarding the result is the rollback. No context drift across queries.
 
 ### Agent 3 — Librarian (knowledge curation)
 
@@ -302,7 +301,6 @@ knowledge:
   archives_dir: "knowledge/archives"
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
-  checkpoints_db_path: "knowledge/checkpoints.db"
 ```
 
 ### Multi-provider (different agents on different models)
@@ -333,7 +331,6 @@ knowledge:
   archives_dir: "knowledge/archives"
   logs_dir: "knowledge/logs"
   db_path: "knowledge/akms.db"
-  checkpoints_db_path: "knowledge/checkpoints.db"
 ```
 
 API keys are never stored in the file — always use environment variables.
@@ -362,17 +359,14 @@ Switching providers: change `agent_assignments` in the config. No code changes n
 from akms.config import load_config
 from akms.providers.registry import build_default_registry
 from akms.knowledge import HybridGraph
-from akms.checkpoints.store import CheckpointStore
 from akms.core.orchestrator import Orchestrator
 
 config = load_config()
 registry = build_default_registry()
 graph = HybridGraph(config.knowledge)
 graph.init_graph_dirs()
-store = CheckpointStore(config.knowledge.checkpoints_db_path)
-store.init_db()
 
-orchestrator = Orchestrator(config=config, registry=registry, graph=graph, checkpoint_store=store)
+orchestrator = Orchestrator(config=config, registry=registry, graph=graph)
 ```
 
 ### Add a knowledge node
@@ -473,9 +467,6 @@ akms/
 │   │   ├── db.py                ← SQLite layer (derived index)
 │   │   ├── graph.py             ← unified HybridGraph facade
 │   │   └── search.py            ← keyword search
-│   ├── checkpoints/
-│   │   ├── store.py             ← checkpoint persistence (SQLite)
-│   │   └── fork.py              ← fork/rollback helpers
 │   ├── providers/               ← claude, openai, gemini, deepseek, ollama
 │   └── logging/
 │       └── conversation_log.py  ← JSONL conversation logger

@@ -183,28 +183,15 @@ def search(ctx: click.Context, query: str, top_k: int, as_json: bool) -> None:
 @click.pass_context
 def ask(ctx: click.Context, section: str, question: str) -> None:
     """Route a question to the Expert for a knowledge section."""
+    from akms.core.orchestrator import Orchestrator
+
     config = ctx.obj["config"]
     registry = ctx.obj["registry"]
-
-    assignment = config.agent_assignments.get("expert") or config.agent_assignments.get("librarian")
-    if not assignment:
-        click.echo("Error: no 'expert' or 'librarian' assignment in agent_assignments", err=True)
-        raise SystemExit(1)
-
-    provider_cfg = config.providers.get(assignment.provider)
-    if not provider_cfg:
-        click.echo(f"Error: provider '{assignment.provider}' not configured", err=True)
-        raise SystemExit(1)
-
-    from akms.agents.expert import ExpertAgent
-
     graph = _build_graph(config)
-    provider = registry.create_from_config(assignment.provider, provider_cfg)
-    expert = ExpertAgent(section=section, provider=provider, model=assignment.model, config=config)
-    count = expert.load_section(graph)
-    if count == 0:
+    if not graph.list_nodes(section):
         click.echo(f"Warning: section '{section}' has no nodes.", err=True)
-    click.echo(expert.answer(question))
+    orc = Orchestrator(config=config, registry=registry, graph=graph)
+    click.echo(orc.query_expert(section, question))
 
 
 @main.command()
