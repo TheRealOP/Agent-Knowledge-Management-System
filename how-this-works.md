@@ -10,74 +10,68 @@
 graph TB
     User["👤 User"]
 
-    subgraph EntryPoints["Any CLI / IDE / Agent"]
+    subgraph AnyAgent["Any Agent / IDE / CLI"]
         direction LR
-        AKMSCLI["akms CLI (cli.py)"]
         CC["Claude Code"]
         AG["Antigravity"]
         CX["Codex"]
         OC["OpenCode"]
+        Local["Local Models"]
         Custom["Your own agent"]
     end
 
-    subgraph Integrations["Integration Layer"]
-        GenW["GenericWrapper"]
-        CCW["ClaudeCodeWrapper"]
-        CXW["CodexWrapper"]
-        OCW["OpenCodeWrapper"]
+    subgraph AKMSCLI["akms CLI — the universal interface"]
+        direction LR
+        Search["akms search"]
+        Ask["akms ask"]
+        Ingest["akms ingest"]
+        Get["akms get"]
+        Sections["akms sections"]
+        Init["akms init"]
     end
 
     subgraph AKMSCore["AKMS Core (Python library)"]
-        Orchestrator["⚙️ Orchestrator\n(NOT an agent — routing only)"]
-        Executor["🤖 Executor Agent"]
+        Orchestrator["⚙️ Orchestrator\n(routing only)"]
         Expert["🤖 Expert Agent(s)"]
         Librarian["🤖 Librarian Agent"]
         Council["🤖 Council Agent"]
     end
 
-    KG["Knowledge Graph"]
+    KG["Knowledge Graph\n(Markdown + SQLite)"]
     CP["Checkpoint Store"]
-    Providers["LLM Providers"]
+    Providers["LLM Providers\n(Claude, GPT, Gemini, Ollama, ...)"]
 
-    User --> EntryPoints
-    AKMSCLI -->|"Python API"| AKMSCore
-    CC --> CCW --> AKMSCore
-    AG --> GenW --> AKMSCore
-    CX --> CXW --> AKMSCore
-    OC --> OCW --> AKMSCore
-    Custom --> GenW
-
-    Executor -->|"query_knowledge(section, q)"| Orchestrator
+    User --> AnyAgent
+    AnyAgent -->|"reads agents.md\nthen runs shell commands"| AKMSCLI
+    AKMSCLI --> AKMSCore
     Orchestrator -->|"creates & caches"| Expert
     Expert -->|"reads nodes"| KG
     Librarian -->|"writes nodes"| KG
-    Executor -->|"chat()"| Providers
     Expert -->|"chat()"| Providers
     Librarian -->|"chat()"| Providers
     Council -->|"chat()"| Providers
     Expert -->|"fork/rollback"| CP
 
     style User fill:#6366f1,color:#fff
-    style EntryPoints fill:#1e293b,color:#fff
-    style Integrations fill:#334155,color:#fff
+    style AnyAgent fill:#1e293b,color:#fff
+    style AKMSCLI fill:#0ea5e9,color:#fff
     style AKMSCore fill:#0f172a,color:#fff
     style Orchestrator fill:#f59e0b,color:#000
     style KG fill:#10b981,color:#fff
     style CP fill:#8b5cf6,color:#fff
     style Providers fill:#ef4444,color:#fff
-    style Executor fill:#0ea5e9,color:#fff
     style Expert fill:#10b981,color:#fff
     style Librarian fill:#f59e0b,color:#000
     style Council fill:#ef4444,color:#fff
 ```
 
 > [!IMPORTANT]
-> **AKMS is a library, not a CLI app.** The `akms` CLI is just one consumer. Any agent IDE — Claude Code, Antigravity, Codex, OpenCode, or your own — can plug in via the integration wrappers or the Python API directly.
+> **The CLI is the universal interface.** Any agent that can run a shell command can use AKMS — no wrapper code, no Python integration, no per-IDE maintenance. The agent reads `agents.md` to learn the available commands, then calls them like skills.
 
 > [!IMPORTANT]
 > **The Orchestrator is NOT an agent.** It's a plain Python coordinator class in `core/orchestrator.py` that never calls an LLM. It manages the Expert pool (caching, splitting large sections, routing queries). Think of it as the **switchboard**, not a participant.
 
-**One sentence:** You chat through whatever IDE/agent you prefer; AKMS provides the persistent knowledge graph underneath via its Python API and integration wrappers.
+**One sentence:** Any agent, from any provider, reads `agents.md` and uses `akms` CLI commands as skills to query, update, and grow a persistent knowledge graph.
 
 ---
 

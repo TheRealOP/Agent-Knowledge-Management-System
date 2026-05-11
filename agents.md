@@ -8,7 +8,7 @@
 
 AKMS (Agent Knowledge Management System) is a Python library that gives AI agents **persistent memory** via a knowledge graph. Knowledge is stored as markdown files backed by SQLite — human-readable, git-friendly, and searchable.
 
-You are operating inside a project that uses AKMS. This means there is a `knowledge/` directory containing structured knowledge you can query, and a set of tools you should use before answering domain-specific questions.
+You are operating inside a project that uses AKMS. This means there is a `knowledge/` directory containing structured knowledge you can query, and a set of CLI commands you should use before answering domain-specific questions.
 
 ---
 
@@ -20,44 +20,39 @@ Do not guess. Do not hallucinate. If the knowledge graph has relevant nodes, use
 
 ---
 
-## How to Query Knowledge
+## How to Use AKMS — CLI Skills
 
-### Tool Protocol
+AKMS exposes all operations as CLI commands. **You don't need any Python integration, wrappers, or plugins.** If you can run a shell command, you can use AKMS.
 
-When you need stored knowledge, emit this JSON block in your response:
+### Core Commands
 
-```json
-{"tool": "query_knowledge", "section": "<section_name>", "question": "<your question>"}
-```
+| Command | What it does | When to use it |
+|---|---|---|
+| `akms search "query"` | Search the knowledge graph for relevant nodes | Before answering any domain question |
+| `akms ask "section" "question"` | Query the Expert agent for a specific section | When you need a detailed, contextual answer from stored knowledge |
+| `akms get section/node-id` | Get the full content of a specific node | When you need the exact content of a known node |
+| `akms sections` | List all available knowledge sections | To discover what knowledge exists |
+| `akms ingest file.md` | Feed a document into the graph via the Librarian | When the user provides new material to learn from |
+| `akms init` | Set up the `knowledge/` directory structure | First-time setup only |
+| `akms status` | Show providers, agent assignments, budget | Diagnostics |
+| `akms budget` | Show today's token usage and cost | Cost monitoring |
+| `akms research` | Show the research queue (knowledge gaps) | To see what's missing |
+| `akms overlay list` | List user understanding scores | To see what the user knows well vs. not |
+| `akms overlay set ID --score 0.7` | Set understanding score for a concept | After the user demonstrates understanding |
+| `akms check` | Find broken wikilinks in the graph | Maintenance |
 
-The system will route your question to an Expert agent that owns that section. You'll receive a compressed answer you can use in your response.
-
-### Available Sections
-
-Run this to discover what sections exist:
-
-```python
-from akms.config import load_config
-from akms.knowledge import HybridGraph
-
-graph = HybridGraph(load_config().knowledge)
-print(graph.list_sections())
-```
-
-Or check `knowledge/graph/` — each subdirectory is a section.
-
-### When to Query vs. Answer Directly
+### Decision Table: When to Query vs. Answer Directly
 
 | Situation | Action |
 |---|---|
-| Question about a domain topic (e.g., "How does Raft work?") | **Query the graph** — `query_knowledge("distributed-systems", "How does Raft work?")` |
+| Question about a domain topic (e.g., "How does Raft work?") | **Run `akms search "Raft consensus"`** or **`akms ask "distributed-systems" "How does Raft work?"`** |
 | General coding task (e.g., "Add a unit test") | **Answer directly** — no graph lookup needed |
 | Question about this project's architecture | **Check `how-this-works.md`** and the `wiki/` directory |
-| Question you're not sure about | **Query the graph first**, then supplement with your own knowledge if the graph has gaps |
+| Question you're not sure about | **Run `akms search` first**, then supplement with your own knowledge if the graph has gaps |
 
 ### Referencing Nodes
 
-When referencing knowledge from the graph, use this format:
+When referencing knowledge from the graph in your responses, use this format:
 
 ```
 graph:section-name/node-id
@@ -81,24 +76,7 @@ akms ingest path/to/document.md
 
 The Librarian agent reads the document, chunks it by heading, classifies each chunk, and creates graph nodes automatically.
 
-### Option 2: Add a node via Python API
-
-```python
-from akms.config import load_config
-from akms.knowledge import HybridGraph
-
-graph = HybridGraph(load_config().knowledge)
-graph.add_node(
-    section="section-name",
-    node_id="node-id",
-    title="Human-Readable Title",
-    content="The actual knowledge content...",
-    tags=["tag1", "tag2"],
-    confidence=0.9,
-)
-```
-
-### Option 3: Drop a markdown file manually
+### Option 2: Drop a markdown file manually
 
 Create a file at `knowledge/graph/<section>/<node-id>.md` with this format:
 
@@ -118,12 +96,6 @@ Content goes here.
 
 ## Connections
 - [[other-node-id]]
-```
-
-Then sync the wikilinks to the SQLite database:
-
-```python
-graph.sync_links()
 ```
 
 ---
@@ -161,10 +133,10 @@ When adding knowledge, set confidence honestly. When using knowledge, note low-c
 
 ### Archive, Don't Delete
 
-Never delete a node directly. Use the Librarian's archive function:
+Never delete a node directly. Use:
 
-```python
-librarian.archive_node("section", "node-id", "Reason for archival", graph)
+```bash
+akms archive "section" "node-id" "Reason for archival"
 ```
 
 This moves the node to `knowledge/archives/` with a reason and timestamp. History is preserved.
@@ -193,68 +165,45 @@ knowledge/
 
 ## Flagging Knowledge Gaps
 
-If you encounter a question the graph can't answer, flag it for the research queue:
+If you encounter a question the graph can't answer, tell the user:
 
-```python
-librarian.add_to_research_queue(
-    topic="Paxos algorithm",
-    reason="Gap in distributed-systems section — user asked about it",
-    queue_path="knowledge/research_queue.md",
-)
-```
-
-Or tell the user: *"This isn't in the knowledge graph yet. I'd recommend adding it via `akms ingest` or flagging it in `knowledge/research_queue.md`."*
+*"This isn't in the knowledge graph yet. I'd recommend adding it via `akms ingest` or flagging it in `knowledge/research_queue.md`."*
 
 ---
 
 ## What NOT to Do
 
-1. **Don't bypass the orchestrator** — always use `query_knowledge` or `orchestrator.query_expert()` to get knowledge. Don't read graph files directly and pretend it's an expert answer.
+1. **Don't skip the graph for domain questions** — even if you "know" the answer, run `akms search` first. The stored knowledge may have project-specific context, confidence scores, or connections you'd miss.
 
-2. **Don't mutate Expert history** — Expert agents use fork/rollback. Each Q&A is a throwaway branch. Never try to persist Expert conversation state.
+2. **Don't hardcode provider assumptions** — AKMS is provider-agnostic. Don't assume Claude, GPT, or any specific model. The user configures this in `akms_config.yaml`.
 
-3. **Don't hardcode provider assumptions** — AKMS is provider-agnostic. Don't assume Claude, GPT, or any specific model. The user configures this in `akms_config.yaml`.
+3. **Don't delete nodes** — archive them instead (see above).
 
-4. **Don't skip the graph for domain questions** — even if you "know" the answer, check the graph. The stored knowledge may have project-specific context, confidence scores, or connections you'd miss.
+4. **Don't ignore low-confidence nodes** — mention them but flag the uncertainty.
 
-5. **Don't delete nodes** — archive them instead (see above).
-
-6. **Don't ignore low-confidence nodes** — mention them but flag the uncertainty.
+5. **Don't read graph files directly when an expert query would be better** — `akms ask` gives you a synthesized answer from the Expert agent; raw file reading gives you unprocessed markdown.
 
 ---
 
 ## Quick Reference
 
-| Task | Command / Code |
-|---|---|
-| List sections | `graph.list_sections()` |
-| List nodes in a section | `graph.list_nodes("section-name")` |
-| Get a node | `graph.get_node("section", "node-id")` |
-| Search the graph | `graph.search("query", top_k=5)` |
-| Add a node | `graph.add_node(section=..., node_id=..., title=..., content=..., tags=..., confidence=...)` |
-| Query an expert | `orchestrator.query_expert("section", "question")` |
-| Ingest a document | `akms ingest file.md` |
-| Check broken links | `librarian.check_consistency(graph)` |
-| Archive a node | `librarian.archive_node("section", "node-id", "reason", graph)` |
-| Sync wikilinks to DB | `graph.sync_links()` |
-| Check budget | `akms budget` |
-| View research queue | `akms research` |
+```bash
+# Discovery
+akms sections                          # What sections exist?
+akms search "consensus algorithms"     # Find relevant nodes
 
----
+# Retrieval
+akms ask "distributed-systems" "How does Raft handle leader election?"
+akms get distributed-systems/raft      # Full node content
 
-## For Agent/IDE Developers
+# Knowledge management
+akms ingest paper.md                   # Feed a document to the Librarian
+akms archive "section" "node" "reason" # Retire a node
+akms check                             # Find broken wikilinks
 
-If you're building an integration for a new agent or IDE, extend `GenericWrapper`:
-
-```python
-from akms.integrations.generic import GenericWrapper
-
-class MyAgentWrapper(GenericWrapper):
-    def __init__(self, orchestrator):
-        super().__init__(
-            orchestrator=orchestrator,
-            extra_system="Your agent-specific instructions here."
-        )
+# Monitoring
+akms status                            # Providers, assignments, budget
+akms budget                            # Today's token usage
+akms research                          # Knowledge gaps queue
+akms overlay list                      # User understanding scores
 ```
-
-This automatically injects the AKMS system prompt (available sections, tool protocol) into every conversation. See `src/akms/integrations/` for examples (Claude Code, Codex, OpenCode).
