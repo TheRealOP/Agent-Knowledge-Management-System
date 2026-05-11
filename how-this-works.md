@@ -65,14 +65,11 @@ graph TB
 ```mermaid
 graph LR
     Root["📁 akms/"]
-    Root --> Config["akms_config.yaml.example"]
+    Root --> Docs["📄 Docs & Config\n(README, wiki/, akms_config.yaml)"]
     Root --> Pyproject["pyproject.toml"]
-    Root --> Readme["README.md"]
     Root --> SrcDir["📁 src/akms/"]
     Root --> KnowDir["📁 knowledge/"]
     Root --> TestDir["📁 tests/"]
-    Root --> WikiDir["📁 wiki/"]
-    Root --> InfoDir["📁 info/"]
 
     SrcDir --> CliPy["cli.py"]
     SrcDir --> ConfigPy["config.py"]
