@@ -9,28 +9,10 @@
 ```mermaid
 graph TB
     User["👤 User"]
+    AnyAgent["Any Agent / IDE\n(Claude Code, Antigravity, Codex, Ollama, ...)"]
+    AKMSCLI["akms CLI\nsearch · ask · get · ingest · sections · ..."]
 
-    subgraph AnyAgent["Any Agent / IDE / CLI"]
-        direction LR
-        CC["Claude Code"]
-        AG["Antigravity"]
-        CX["Codex"]
-        OC["OpenCode"]
-        Local["Local Models"]
-        Custom["Your own agent"]
-    end
-
-    subgraph AKMSCLI["akms CLI — the universal interface"]
-        direction LR
-        Search["akms search"]
-        Ask["akms ask"]
-        Ingest["akms ingest"]
-        Get["akms get"]
-        Sections["akms sections"]
-        Init["akms init"]
-    end
-
-    subgraph AKMSCore["AKMS Core (Python library)"]
+    subgraph AKMSCore["AKMS Core"]
         Orchestrator["⚙️ Orchestrator\n(routing only)"]
         Expert["🤖 Expert Agent(s)"]
         Librarian["🤖 Librarian Agent"]
@@ -39,10 +21,10 @@ graph TB
 
     KG["Knowledge Graph\n(Markdown + SQLite)"]
     CP["Checkpoint Store"]
-    Providers["LLM Providers\n(Claude, GPT, Gemini, Ollama, ...)"]
+    Providers["LLM Providers"]
 
     User --> AnyAgent
-    AnyAgent -->|"reads agents.md\nthen runs shell commands"| AKMSCLI
+    AnyAgent -->|"reads agents.md\nruns shell commands"| AKMSCLI
     AKMSCLI --> AKMSCore
     Orchestrator -->|"creates & caches"| Expert
     Expert -->|"reads nodes"| KG
