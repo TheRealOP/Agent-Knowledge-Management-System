@@ -40,6 +40,7 @@ AKMS exposes all operations as CLI commands. **You don't need any Python integra
 | `akms overlay list` | List user understanding scores | To see what the user knows well vs. not |
 | `akms overlay set ID --score 0.7` | Set understanding score for a concept | After the user demonstrates understanding |
 | `akms check` | Find broken wikilinks in the graph | Maintenance |
+| `akms council "task" "context"` | Run a 5-role deliberation (Advocate, Critic, Historian, Innovator, Synthesizer) | Complex or ambiguous decisions |
 
 ### Decision Table: When to Query vs. Answer Directly
 

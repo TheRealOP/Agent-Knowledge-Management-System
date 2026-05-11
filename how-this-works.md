@@ -10,13 +10,14 @@
 graph TB
     User["👤 User"]
     AnyAgent["Any Agent / IDE\n(Claude Code, Antigravity, Codex, Ollama, ...)"]
-    AKMSCLI["akms CLI\nsearch · ask · get · ingest · sections · ..."]
 
-    subgraph AKMSCore["AKMS Core"]
-        Orchestrator["⚙️ Orchestrator\n(routing only)"]
+    subgraph AKMS["AKMS"]
+        CLI["CLI\nsearch · ask · get · ingest · ..."]
+        Orchestrator["⚙️ Orchestrator\n(routing & expert pool)"]
         Expert["🤖 Expert Agent(s)"]
         Librarian["🤖 Librarian Agent"]
         Council["🤖 Council Agent"]
+        CLI --> Orchestrator
     end
 
     KG["Knowledge Graph\n(Markdown + SQLite)"]
@@ -24,20 +25,22 @@ graph TB
     Providers["LLM Providers"]
 
     User --> AnyAgent
-    AnyAgent -->|"reads agents.md\nruns shell commands"| AKMSCLI
-    AKMSCLI --> AKMSCore
-    Orchestrator -->|"creates & caches"| Expert
+    AnyAgent -->|"reads agents.md\nruns shell commands"| CLI
+    Orchestrator -->|"ask"| Expert
+    Orchestrator -->|"ingest"| Librarian
+    Orchestrator -->|"council"| Council
     Expert -->|"reads nodes"| KG
     Librarian -->|"writes nodes"| KG
     Expert -->|"chat()"| Providers
     Librarian -->|"chat()"| Providers
     Council -->|"chat()"| Providers
     Expert -->|"fork/rollback"| CP
+    Providers -->|"powers"| AnyAgent
 
     style User fill:#6366f1,color:#fff
     style AnyAgent fill:#1e293b,color:#fff
-    style AKMSCLI fill:#0ea5e9,color:#fff
-    style AKMSCore fill:#0f172a,color:#fff
+    style AKMS fill:#0f172a,color:#fff
+    style CLI fill:#0ea5e9,color:#fff
     style Orchestrator fill:#f59e0b,color:#000
     style KG fill:#10b981,color:#fff
     style CP fill:#8b5cf6,color:#fff
