@@ -336,6 +336,66 @@ def research(ctx: click.Context) -> None:
     click.echo(queue_path.read_text())
 
 
+@main.command()
+@click.argument("goal")
+@click.pass_context
+def dev_sage(ctx: click.Context, goal: str) -> None:
+    """Run the Dev-Sage agent to achieve a high-level development goal."""
+    from akms.agents.dev_sage import DevSageAgent
+    from akms.core.multi_orchestrator import MultiProviderOrchestrator
+    from akms.core.quota import QuotaManager
+
+    config = ctx.obj["config"]
+    registry = ctx.obj["registry"]
+    graph = _build_graph(config)
+
+    quota_manager = QuotaManager(graph.sqlite)
+    orc = MultiProviderOrchestrator(
+        config=config, registry=registry, graph=graph, quota_manager=quota_manager
+    )
+
+    agent = DevSageAgent(orchestrator=orc, graph=graph, config=config)
+    click.echo(f"[*] Dev-Sage starting: {goal}")
+    result = agent.solve(goal)
+    click.echo("\n--- FINAL RESULT ---\n")
+    click.echo(result)
+
+
+@main.command()
+@click.pass_context
+def usage(ctx: click.Context) -> None:
+    """Show current provider usage and health."""
+    from akms.core.quota import QuotaManager
+
+    config = ctx.obj["config"]
+    graph = _build_graph(config)
+    qm = QuotaManager(graph.sqlite)
+    health = qm.get_provider_health()
+
+    click.echo("Provider Usage & Health:")
+    if not health:
+        click.echo("  No usage recorded yet.")
+        return
+
+    for key, stats in health.items():
+        score = stats["score"] * 100
+        click.echo(
+            f"  {key:30} | Health: {score:3.0f}% | Used: {stats['usage']:8} / {stats['limit']:8} ({stats['type']})"
+        )
+
+
+@main.command()
+@click.argument("provider")
+@click.argument("model")
+@click.argument("limit", type=int)
+@click.option("--type", "qtype", default="tokens", help="Quota type: tokens or messages")
+@click.pass_context
+def set_quota(ctx: click.Context, provider: str, model: str, limit: int, qtype: str) -> None:
+    """Set the quota limit for a specific provider/model."""
+    config = ctx.obj["config"]
+    graph = _build_graph(config)
+    graph.sqlite.update_usage(provider, model, quota_limit=limit, quota_type=qtype)
+    click.echo(f"✓ Set {qtype} quota for {provider}/{model} to {limit}")
 
 
 if __name__ == "__main__":

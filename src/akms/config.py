@@ -26,6 +26,11 @@ class AgentAssignment:
 
 
 @dataclass
+class AgentPool:
+    assignments: list[AgentAssignment] = field(default_factory=list)
+
+
+@dataclass
 class KnowledgeConfig:
     graph_dir: str = "knowledge/graph"
     archives_dir: str = "knowledge/archives"
@@ -42,6 +47,7 @@ class ExpertConfig:
 class AKMSConfig:
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
     agent_assignments: dict[str, AgentAssignment] = field(default_factory=dict)
+    agent_pools: dict[str, AgentPool] = field(default_factory=dict)
     knowledge: KnowledgeConfig = field(default_factory=KnowledgeConfig)
     expert: ExpertConfig = field(default_factory=ExpertConfig)
 
@@ -78,6 +84,21 @@ def _parse_assignments(raw: dict[str, Any]) -> dict[str, AgentAssignment]:
     return assignments
 
 
+def _parse_pools(raw: dict[str, Any]) -> dict[str, AgentPool]:
+    pools = {}
+    for role, data in raw.items():
+        assignments = []
+        for item in data:
+            assignments.append(
+                AgentAssignment(
+                    provider=item["provider"],
+                    model=item["model"],
+                )
+            )
+        pools[role] = AgentPool(assignments=assignments)
+    return pools
+
+
 def load_config(path: str | Path | None = None) -> AKMSConfig:
     """Load AKMS config. Searches: explicit path → ./akms_config.yaml → ~/.akms/config.yaml."""
     search_paths = [
@@ -101,6 +122,7 @@ def load_config(path: str | Path | None = None) -> AKMSConfig:
     return AKMSConfig(
         providers=_parse_providers(raw.get("providers", {})),
         agent_assignments=_parse_assignments(raw.get("agent_assignments", {})),
+        agent_pools=_parse_pools(raw.get("agent_pools", {})),
         knowledge=KnowledgeConfig(**raw.get("knowledge", {})),
         expert=ExpertConfig(**raw.get("expert", {})),
     )

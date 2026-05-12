@@ -32,3 +32,15 @@ CREATE TABLE IF NOT EXISTS search_index (
     keywords TEXT NOT NULL,
     PRIMARY KEY (node_id)
 );
+
+CREATE TABLE IF NOT EXISTS usage (
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    tokens_input INTEGER DEFAULT 0,
+    tokens_output INTEGER DEFAULT 0,
+    messages_count INTEGER DEFAULT 0,
+    quota_limit INTEGER DEFAULT 0,
+    quota_type TEXT NOT NULL DEFAULT 'tokens', -- 'tokens' or 'messages'
+    last_reset TEXT NOT NULL,
+    PRIMARY KEY (provider, model)
+);

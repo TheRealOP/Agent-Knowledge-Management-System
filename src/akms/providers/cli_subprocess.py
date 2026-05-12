@@ -190,10 +190,10 @@ class CLISubprocessProvider(LLMProvider):
     def _build_argv(self, model: str | None, prompt: str) -> list[str]:
         """Build the subprocess argv for a one-shot CLI call."""
         argv = [self._cli_binary]
-        if self._print_flag:
-            argv.append(self._print_flag)
         if model and self._model_flag:
             argv.extend([self._model_flag, model])
         argv.extend(self._extra_args)
+        if self._print_flag:
+            argv.append(self._print_flag)
         argv.append(prompt)
         return argv

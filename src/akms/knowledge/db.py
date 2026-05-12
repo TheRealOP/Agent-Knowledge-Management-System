@@ -134,3 +134,55 @@ class SQLiteLayer:
             conn.execute("DELETE FROM provenance WHERE node_id = ?", (node_id,))
             conn.execute("DELETE FROM search_index WHERE node_id = ?", (node_id,))
             conn.commit()
+
+    def update_usage(
+        self,
+        provider: str,
+        model: str,
+        tokens_input: int = 0,
+        tokens_output: int = 0,
+        messages_inc: int = 0,
+        quota_limit: int = 0,
+        quota_type: str = "tokens",
+        last_reset: str | None = None,
+    ) -> None:
+        import datetime
+
+        now = last_reset or datetime.datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO usage (provider, model, tokens_input, tokens_output, messages_count, quota_limit, quota_type, last_reset)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(provider, model) DO UPDATE SET
+                    tokens_input = tokens_input + excluded.tokens_input,
+                    tokens_output = tokens_output + excluded.tokens_output,
+                    messages_count = messages_count + excluded.messages_count,
+                    quota_limit = CASE WHEN excluded.quota_limit > 0 THEN excluded.quota_limit ELSE quota_limit END,
+                    quota_type = excluded.quota_type,
+                    last_reset = excluded.last_reset
+                """,
+                (
+                    provider,
+                    model,
+                    tokens_input,
+                    tokens_output,
+                    messages_inc,
+                    quota_limit,
+                    quota_type,
+                    now,
+                ),
+            )
+            conn.commit()
+
+    def get_usage(self, provider: str, model: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM usage WHERE provider = ? AND model = ?", (provider, model)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def get_all_usage(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT * FROM usage").fetchall()
+            return [dict(r) for r in rows]
