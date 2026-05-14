@@ -58,13 +58,13 @@ def test_flatten_mixed(provider):
 
 def test_build_argv_default(provider):
     argv = provider._build_argv("claude-opus-4-6", "my prompt")
-    assert argv == ["claude", "-p", "--model", "claude-opus-4-6", "my prompt"]
+    assert argv == ["claude", "--model", "claude-opus-4-6", "-p", "my prompt"]
 
 
-def test_build_argv_no_model_flag():
-    p = CLISubprocessProvider(cli_binary="codex", print_flag="exec", model_flag=None)
+def test_build_argv_codex_model_flag():
+    p = CLISubprocessProvider(cli_binary="codex", print_flag="exec")
     argv = p._build_argv("gpt-5-codex", "my prompt")
-    assert argv == ["codex", "exec", "my prompt"]
+    assert argv == ["codex", "--model", "gpt-5-codex", "exec", "my prompt"]
 
 
 def test_build_argv_extra_args():

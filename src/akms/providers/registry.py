@@ -81,7 +81,7 @@ def build_default_registry() -> ProviderRegistry:
         )
         registry.register(
             "codex_cli",
-            lambda **kw: CLISubprocessProvider(cli_binary="codex", print_flag="exec", model_flag=None, **kw),
+            lambda **kw: CLISubprocessProvider(cli_binary="codex", print_flag="exec", **kw),
         )
         registry.register(
             "gemini_cli",
